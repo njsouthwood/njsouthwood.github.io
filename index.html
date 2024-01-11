@@ -6,6 +6,7 @@
         <meta property="og:image" content="assets/img/headshot.jpg" name="image">
         <link rel="icon" type="image/x-icon" href="assets/img/favicon.ico?v=2" />
         <link href="https://fonts.googleapis.com/css?family=DM+Mono:400,700" rel="stylesheet" type="text/css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
         <title>Neil Southwood</title>
         <style type="text/css">
             body {
@@ -30,8 +31,14 @@
             a:hover, a:active {
                 color: #3af;
             }
-            img {
+            .profile-pic {
                 border-radius: 100%
+            }
+            .social-icon {
+                color: black
+            }
+            .social-icon:hover, .social-icon:active {
+                color: #666
             }
         </style>
     </head>
@@ -41,12 +48,13 @@
         </header>
 
         <img
+            class="profile-pic"
             src="assets/img/headshot.jpg"
             width="200"
         />
         <p>
             Software engineer in Portland, OR. Currently working for <a href="https://aws.amazon.com/what-is-aws/">Amazon Web Services (AWS)</a>.
         </p>
-        <p>Connect with me on <a href="https://www.linkedin.com/in/neilsouthwood/">LinkedIn</a>.</p>
+        <a class="social-icon" href="https://www.linkedin.com/in/neilsouthwood/"><i class="fa fa-linkedin-square" style="font-size:24px"></i></a>
     </body>
 </html>

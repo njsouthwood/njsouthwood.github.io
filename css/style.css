@@ -109,3 +109,71 @@ a:hover, a:active {
     font-size: 16px;
   }
   
+
+/* ── terminal: the most minimalist feature on any website ever ─────────────── */
+/* at rest it is nothing but a blinking block cursor at the bottom of the page. */
+#terminal {
+    position: relative;
+    margin-top: 48px;
+    font-family: "DM Mono", "Courier New", Courier, monospace;
+    font-size: 14px;
+    line-height: 1.6;
+    max-height: 360px;
+    overflow-y: auto;
+    cursor: text;
+}
+#terminal .terminal-log {
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+#terminal .terminal-line {
+    margin: 0;
+}
+/* what you type: subtle, almost a ghost */
+#terminal .terminal-in {
+    opacity: 0.55;
+}
+/* what the cursor "says": plain body color */
+#terminal .terminal-out {
+    opacity: 0.9;
+}
+#terminal .terminal-row {
+    display: flex;
+    align-items: center;
+    white-space: pre;
+}
+#terminal .terminal-typed {
+    white-space: pre;
+}
+/* the whole point: a blinking cursor, and nothing else */
+#terminal .terminal-caret {
+    display: inline-block;
+    animation: terminal-blink 1.1s step-end infinite;
+    opacity: 0.85;
+}
+#terminal .terminal-caret-done {
+    animation: none;
+    opacity: 0.25;
+}
+/* the real input is invisible and sits on top of the caret row; the caret span
+   stands in for it visually. kept inside the row (not off-screen) so focusing
+   it never scrolls the page. */
+#terminal .terminal-input {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    border: 0;
+    padding: 0;
+    margin: 0;
+    background: transparent;
+    font: inherit;
+    color: transparent;
+    caret-color: transparent;
+    outline: none;
+}
+@keyframes terminal-blink {
+    0%, 50% { opacity: 0.85; }
+    50.01%, 100% { opacity: 0; }
+}

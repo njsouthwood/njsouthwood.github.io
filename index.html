@@ -12,7 +12,7 @@
 
         <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.4.0/jquery.min.js"></script>
         <script src="js/darkMode.js" charset="utf-8"></script>
-        <script src="js/app.js" charset="utf-8"></script>
+        <script src="js/terminal.js" charset="utf-8"></script>
         <title>Neil Southwood</title>
     </head>
     <body>
@@ -35,5 +35,16 @@
             Software engineer in Portland, OR. Currently working for <a href="https://aws.amazon.com/what-is-aws/">Amazon Web Services (AWS)</a>.    
         </p>
         <a class="social-icon" href="https://www.linkedin.com/in/neilsouthwood/"><i class="fa fa-linkedin-square" style="font-size:24px"></i></a>
+
+        <!-- the most minimalist feature on any website ever: a blinking cursor -->
+        <div id="terminal">
+            <div class="terminal-log"></div>
+            <div class="terminal-row">
+                <span class="terminal-typed" aria-hidden="true"></span><span class="terminal-caret" aria-hidden="true">▋</span>
+                <input class="terminal-input" type="text" autocomplete="off"
+                       autocorrect="off" autocapitalize="off" spellcheck="false"
+                       maxlength="120" aria-label="A minimalist terminal. Type and press Enter." />
+            </div>
+        </div>
     </body>
 </html>

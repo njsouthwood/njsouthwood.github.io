@@ -28,6 +28,45 @@ document.addEventListener('DOMContentLoaded', () => {
   const TRIGGER_COUNT = 4;
   const TRIGGER_WORDS = ['adventure', 'game', 'are you real', 'help me'];
 
+  // ── Hashed gate answers ─────────────────────────────────────────────────────
+  // A few puzzle answers are stored as salted, iterated SHA-256 hashes instead
+  // of plaintext, so a developer poking at the source to cheat finds a hash,
+  // not the word. (Not real security — the answers are short and derivable from
+  // in-game clues — just a wink at anyone trying to shortcut the game.)
+  //
+  // These values MUST match scripts/hash-answers.js. To change a hashed answer,
+  // edit that script and re-run `node scripts/hash-answers.js`, then paste.
+  const hashConfig = { SALT: 'njs-terminal-v1::', ITERATIONS: 2000 };
+
+  function normalizeAnswer(s) {
+    return s.toLowerCase().replace(/\s+/g, '');
+  }
+
+  function toHex(buf) {
+    return Array.from(new Uint8Array(buf))
+      .map((b) => b.toString(16).padStart(2, '0'))
+      .join('');
+  }
+
+  // SHA-256 applied ITERATIONS times over (salt + normalized answer). Round 1
+  // hashes the UTF-8 bytes of the salted string; each later round hashes the
+  // raw 32-byte digest. Mirrors the Node build script exactly.
+  async function hashAnswer(answer) {
+    const enc = new TextEncoder();
+    let data = enc.encode(hashConfig.SALT + normalizeAnswer(answer));
+    for (let i = 0; i < hashConfig.ITERATIONS; i++) {
+      data = new Uint8Array(await crypto.subtle.digest('SHA-256', data));
+    }
+    return toHex(data);
+  }
+
+  // True if `text` matches any stored hash for this gate node.
+  async function matchesHashedAnswer(gateNode, text) {
+    if (!gateNode.answerHash) return false;
+    const h = await hashAnswer(text);
+    return gateNode.answerHash.includes(h);
+  }
+
   const LINKEDIN = 'https://www.linkedin.com/in/neilsouthwood/';
   // crude but effective: catch people asking about Neil and point them at the
   // real person. matches "neil", "southwood", "the owner", "who made this", etc.
@@ -273,7 +312,7 @@ document.addEventListener('DOMContentLoaded', () => {
         "   > on file: 'FDHVDU'\n\n" +
         'it wants the decoded word.',
       gate: true,
-      answer: ['caesar', 'CAESAR'],
+      answerHash: ["a44ac8e191f7dca24e1f7f254515f3633d78b8694576ddd9b34ab76ab3ddafe1"],
       gateGoto: 'termUnlocked',
       reject: "   > DENIED.",
       choices: [{ match: ['door'], goto: 'door1' }],
@@ -331,7 +370,7 @@ document.addEventListener('DOMContentLoaded', () => {
         '   "I am taken from a mine and shut in a wooden case, from which I am never released, and yet I am used by almost everybody. what am I?"\n' +
         'it wants a one-word ANSWER.',
       gate: true,
-      answer: ['pencil', 'a pencil', 'lead', 'pencil lead'],
+      answerHash: ["66775c827bb9f4d4eea754062c66adf3188f8593cab6f74f4b7fc304da824cf8","db0a4ede901d619d3a026b6c1b47f7605e57304b39382278c48f827756307105","1b87e99b99203fe3d6259f3ecaea42bfeeabb258c465b6220b51691235fe2435","c46387628744fbe27ebcf6a35ef8a673f6a07bebf58e2e7df0de08148d8a9188"],
       gateGoto: 'serverRoom',
       reject: "   > the plate stays shut.",
       choices: [{ match: ['archive', 'corridor', 'back'], goto: 'corridor' }],
@@ -360,7 +399,7 @@ document.addEventListener('DOMContentLoaded', () => {
     safe: {
       text: 'the SAFE wants a 4-digit code.',
       gate: true,
-      answer: ['6666'],
+      answerHash: ["2bf31bf6912f0e1a48192b1cb93a72f3649b1c3adb810dee786378c7627729ef"],
       gateGoto: 'safeOpen',
       reject: '   > CLUNK. wrong.',
       choices: [
@@ -558,6 +597,39 @@ document.addEventListener('DOMContentLoaded', () => {
     text.split('\n').forEach((l) => line(l, 'out'));
   }
 
+  // Resolve a gate: accept the typed answer if it matches a hashed answer OR a
+  // plaintext one; otherwise try an escape-hatch choice; otherwise reject.
+  // Async because the hash comparison awaits Web Crypto. A guard freezes the
+  // current node so a second Enter mid-hash can't desync the game.
+  let checkingGate = false;
+  async function checkGate(n, text, lower) {
+    if (checkingGate) return;
+    checkingGate = true;
+    const settleNode = node;
+    try {
+      const norm = normalizeAnswer;
+
+      // 1. fast, synchronous checks first: plaintext answers and escape-hatch
+      //    choices (e.g. 'back'). no point hashing a navigation word.
+      const plain = n.answer ? (Array.isArray(n.answer) ? n.answer : [n.answer]) : [];
+      if (plain.some((a) => norm(a) === norm(text))) { advance(n.gateGoto); return; }
+
+      const earlyChoice = n.choices && n.choices.find((c) =>
+        c.match.some((m) => lower === m || lower.includes(m)));
+      if (earlyChoice) { advance(earlyChoice.goto); return; }
+
+      // 2. otherwise, the slow path: compare against stored hashes.
+      const hashHit = await matchesHashedAnswer(n, text);
+      // if the player navigated away while the hash computed, do nothing.
+      if (node !== settleNode) return;
+      if (hashHit) { advance(n.gateGoto); return; }
+
+      say(n.reject || 'rejected. that is not the answer.');
+    } finally {
+      checkingGate = false;
+    }
+  }
+
   // ── The flip ─────────────────────────────────────────────────────────────────
   function enterAdventure() {
     node = 'start';
@@ -635,15 +707,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
       // gate node: must type an exact answer (case/space-insensitive). anything
       // else loops here with a reject line. choices on a gate still work, so you
-      // can also offer escape hatches like 'back'.
+      // can also offer escape hatches like 'back'. answers may be stored either
+      // as plaintext (`answer`) or as salted SHA-256 hashes (`answerHash`).
       if (n.gate) {
-        const norm = (s) => s.toLowerCase().replace(/\s+/g, '');
-        const answers = Array.isArray(n.answer) ? n.answer : [n.answer];
-        if (answers.some((a) => norm(a) === norm(text))) { advance(n.gateGoto); return; }
-        const earlyChoice = n.choices && n.choices.find((c) =>
-          c.match.some((m) => lower === m || lower.includes(m)));
-        if (earlyChoice) { advance(earlyChoice.goto); return; }
-        say(n.reject || 'rejected. that is not the answer.');
+        checkGate(n, text, lower);
         return;
       }
 

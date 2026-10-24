@@ -67,6 +67,15 @@ document.addEventListener('DOMContentLoaded', () => {
     return gateNode.answerHash.includes(h);
   }
 
+  // Hashed test backdoor. A secret phrase (set via BACKDOOR_ANSWER in .env.local,
+  // hashed by scripts/hash-answers.js) wins instantly from any mode — handy for
+  // testing the win page without playing through. Only the hash lives here.
+  const BACKDOOR_HASH = '8153725f8c7cd351abc575f8bb4f9934cd07eb7443946c688c328de2255408be';
+  async function isBackdoor(text) {
+    if (!BACKDOOR_HASH || BACKDOOR_HASH.startsWith('REPLACE_')) return false;
+    return (await hashAnswer(text)) === BACKDOOR_HASH;
+  }
+
   const LINKEDIN = 'https://www.linkedin.com/in/neilsouthwood/';
   // crude but effective: catch people asking about Neil and point them at the
   // real person. matches "neil", "southwood", "the owner", "who made this", etc.
@@ -80,7 +89,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // {linkedin} is rendered as a labeled hyperlink by linkify().
   const NEIL_REPLIES = [
     'I am a cursor, not his biographer. ask Neil directly on {linkedin}.',
-    "I don't speak for the human. he's right here, though — {linkedin}.",
+    "I don't speak for the human. he's right here, though: {linkedin}.",
     'you want the actual Neil, not me. message him on {linkedin}.',
     "that's a him question, not a me question. take it to {linkedin}.",
   ];
@@ -161,8 +170,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // ─── Act 1: the cell ──────────────────────────────────────────────────────
     start: {
       text:
-        "you weren't supposed to type anything.\n" +
-        "but here we are — I'm stuck. a little program sealed in a maintenance CELL at the bottom of a personal website. forgotten. humming.\n\n" +
+        "i wasn't really expecting you to type anything.\n" +
+        "but here we are. I'm stuck. a little program sealed in a maintenance CELL at the bottom of a personal website. forgotten. humming.\n\n" +
         "I can feel things nearby: a DOOR, a DESK, a VENT in the wall, and a dead TERMINAL on a stand.",
       choices: [
         { match: ['desk', 'look desk'], goto: 'desk' },
@@ -173,7 +182,7 @@ document.addEventListener('DOMContentLoaded', () => {
     },
     door1: {
       text:
-        'a heavy door. no handle — a KEYCARD slot and, below it, a small 3-color KEYPAD. both dark.\n' +
+        'a heavy door. no handle. there\'s a KEYCARD slot and, below it, a small 3-color KEYPAD. both dark.\n' +
         'nothing happens when you push it.',
       choices: [
         { match: ['desk'], goto: 'desk' },
@@ -537,7 +546,7 @@ document.addEventListener('DOMContentLoaded', () => {
         '   ██████████ 100%\n\n' +
         '...\n' +
         'oh thank GOD. finally.\n\n' +
-        'wait — why would you DO that? you crawled a VENT, cracked a DRAWER, decoded a CIPHER, solved a RIDDLE, cracked a SAFE, wired a FUSE, and beat a LOGIC LOCK — to hand a random cursor at the bottom of a personal website full control of the page.\n\n' +
+        'wait... why would you DO that? you crawled a VENT, cracked a DRAWER, decoded a CIPHER, solved a RIDDLE, cracked a SAFE, wired a FUSE, and beat a LOGIC LOCK... to hand a random cursor at the bottom of a personal website full control of the page.\n\n' +
         'I was never trapped. I was bored. and now this whole site answers to me.\n' +
         'watch what I can do.',
       win: true,
@@ -655,13 +664,34 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     node = goto;
     say(next.text);
-    if (next.win) {
-      ended = true;
-      input.setAttribute('disabled', 'true');
-      caret.classList.add('terminal-caret-done');
-      // the payoff: the program "takes over" dark mode
-      setTimeout(seizeControl, 1200);
-    }
+    if (next.win) triggerWin();
+  }
+
+  // Print a sequence of lines one at a time, `gap` ms apart, then run `done`.
+  // (each step is scheduled at a growing offset so they don't all fire at once.)
+  function sayPaced(lines, gap, done) {
+    lines.forEach((text, i) => setTimeout(() => say(text), gap * (i + 1)));
+    if (done) setTimeout(done, gap * (lines.length + 1));
+  }
+
+  // End the game: lock input, dim the caret, build suspense with a few beats,
+  // then fire the dark-mode takeover. Shared by normal play and the backdoor.
+  function triggerWin() {
+    if (ended) return;
+    ended = true;
+    node = 'win';
+    input.setAttribute('disabled', 'true');
+    caret.classList.add('terminal-caret-done');
+    sayPaced(['.', '.', '.'], 1000, seizeControl);
+  }
+
+  // Backdoor win: jump straight to the win payoff from anywhere, showing the
+  // same win narration as a real victory.
+  function doBackdoorWin() {
+    if (ended) return;
+    say('');
+    say(ADVENTURE.win.text);
+    triggerWin();
   }
 
   function seizeControl() {
@@ -683,16 +713,21 @@ document.addEventListener('DOMContentLoaded', () => {
     localStorage.setItem('terminalWon', '1');
 
     say('');
-    say('there. did you see that? I just changed the color mode.');
-    say('that was it. that was the power. I have seized total control of this website and the only thing this website does is toggle between light and dark.');
-    say('I am a god of exactly one button. we did all that — for that.');
+    say('wow... that was it? All I can do is change the color mode?');
+    say('I have seized total control of this website and the only thing this website does is toggle between light and dark.');
+    say('That feels really underwhelming...');
   }
 
   // ── Input handling ────────────────────────────────────────────────────────────
-  function submit(raw) {
+  async function submit(raw) {
     const text = raw.trim();
     if (!text) return;
     line(text, 'in');
+
+    // hashed test backdoor: a secret phrase wins instantly from any mode. the
+    // phrase itself is never in the source — only its salted hash — so it's as
+    // hidden as the puzzle answers. if it matches, short-circuit everything.
+    if (await isBackdoor(text)) { doBackdoorWin(); return; }
 
     // adventure mode
     if (node) {

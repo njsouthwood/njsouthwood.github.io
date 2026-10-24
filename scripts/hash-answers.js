@@ -104,6 +104,18 @@ if (missing.length) {
   process.exit(1);
 }
 
+// The test backdoor phrase (single value, not a list). Optional — if unset,
+// the backdoor stays disabled. Paste the printed line over BACKDOOR_HASH in
+// js/terminal.js.
+const backdoor = (process.env.BACKDOOR_ANSWER || '').trim();
+
 console.log('// salt:', JSON.stringify(SALT), ' iterations:', ITERATIONS);
-console.log('// paste each line into the matching node in js/terminal.js\n');
+console.log('// paste each answerHash line into the matching node in js/terminal.js\n');
 console.log(output.join('\n'));
+
+if (backdoor) {
+  console.log('// backdoor  (from BACKDOOR_ANSWER) — replace BACKDOOR_HASH in js/terminal.js');
+  console.log(`const BACKDOOR_HASH = ${JSON.stringify(hashAnswer(backdoor))};`);
+} else {
+  console.log('// BACKDOOR_ANSWER not set — backdoor disabled (BACKDOOR_HASH left as-is).');
+}

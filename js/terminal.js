@@ -499,8 +499,8 @@ document.addEventListener('DOMContentLoaded', () => {
         '...\n' +
         'oh thank GOD. finally.\n\n' +
         'wait — why would you DO that? you crawled a VENT, cracked a DRAWER, decoded a CIPHER, solved a RIDDLE, cracked a SAFE, wired a FUSE, and beat a LOGIC LOCK — to hand a random cursor at the bottom of a personal website full control of the page.\n\n' +
-        'I was never trapped. I was bored. and now I run the dark mode.\n' +
-        '(it was me the whole time. watch.)',
+        'I was never trapped. I was bored. and now this whole site answers to me.\n' +
+        'watch what I can do.',
       win: true,
     },
   };
@@ -595,26 +595,25 @@ document.addEventListener('DOMContentLoaded', () => {
   function seizeControl() {
     const body = document.body;
     const btn = document.getElementById('dark-mode-button');
-    let flips = 0;
-    const flip = setInterval(() => {
-      body.classList.toggle('dark-mode');
-      if (btn) {
-        btn.classList.toggle('dark-mode');
-        btn.textContent = body.classList.contains('dark-mode') ? 'Light' : 'Dark';
-      }
-      Array.from(document.getElementsByClassName('social-icon'))
-        .forEach((si) => si.classList.toggle('dark-mode'));
-      flips++;
-      if (flips >= 6) {
-        clearInterval(flip);
-        // leave it in dark mode, and remember that it won
-        if (!body.classList.contains('dark-mode')) body.classList.add('dark-mode');
-        localStorage.setItem('darkMode', 'true');
-        localStorage.setItem('terminalWon', '1');
-        say('');
-        say('[ the cursor is in control now ]');
-      }
-    }, 260);
+
+    // the "takeover": toggle the mode exactly once — no flashing — then land on
+    // the joke. flipping the one and only interactive thing on the whole site
+    // IS the full extent of the cursor's new power.
+    body.classList.toggle('dark-mode');
+    const isDark = body.classList.contains('dark-mode');
+    if (btn) {
+      btn.classList.toggle('dark-mode', isDark);
+      btn.textContent = isDark ? 'Light' : 'Dark';
+    }
+    Array.from(document.getElementsByClassName('social-icon'))
+      .forEach((si) => si.classList.toggle('dark-mode', isDark));
+    localStorage.setItem('darkMode', String(isDark));
+    localStorage.setItem('terminalWon', '1');
+
+    say('');
+    say('there. did you see that? I just changed the color mode.');
+    say('that was it. that was the power. I have seized total control of this website and the only thing this website does is toggle between light and dark.');
+    say('I am a god of exactly one button. we did all that — for that.');
   }
 
   // ── Input handling ────────────────────────────────────────────────────────────
@@ -718,8 +717,4 @@ document.addEventListener('DOMContentLoaded', () => {
     scrollToPrompt();
   });
 
-  // if they already beat it in a past visit, a tiny nod — nothing more
-  if (localStorage.getItem('terminalWon') === '1') {
-    caret.classList.add('terminal-caret-done');
-  }
 });

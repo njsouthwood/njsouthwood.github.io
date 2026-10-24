@@ -569,8 +569,13 @@ document.addEventListener('DOMContentLoaded', () => {
   function advance(goto) {
     let next = ADVENTURE[goto];
     if (!next) return;
+    // gate on required items: if you lack one, redirect to the blocked node.
+    // crucially, track the RESOLVED id so `node` matches the text we show —
+    // otherwise we'd land the player on a gate node while showing the blocked
+    // text, letting them clear the gate without ever holding the item.
     if (next.requires && !inventory.has(next.requires)) {
-      next = ADVENTURE[next.blockedGoto];
+      goto = next.blockedGoto;
+      next = ADVENTURE[goto];
       if (!next) { say("that doesn't work yet."); return; }
     }
     if (next.grants) {

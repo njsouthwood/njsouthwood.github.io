@@ -111,23 +111,37 @@ a:hover, a:active {
   
 
 /* ── terminal: the most minimalist feature on any website ever ─────────────── */
-/* at rest it is nothing but a blinking block cursor at the bottom of the page. */
+/* at rest it is nothing but a blinking block cursor at the bottom of the page.
+   it is NOT its own scroll box — it flows with the document so that, as the
+   session grows, the whole page scrolls up and you keep typing at the very
+   bottom, as if the webpage were just the top of a long terminal session. */
 #terminal {
     position: relative;
     margin-top: 48px;
     font-family: "DM Mono", "Courier New", Courier, monospace;
     font-size: 14px;
     line-height: 1.6;
-    max-height: 360px;
-    overflow-y: auto;
     cursor: text;
 }
 #terminal .terminal-log {
     white-space: pre-wrap;
+    overflow-wrap: anywhere;
     word-break: break-word;
 }
 #terminal .terminal-line {
     margin: 0;
+}
+/* links the cursor hands out (e.g. LinkedIn) stay styled like the page's links */
+#terminal a {
+    color: #07C;
+    text-decoration: underline;
+}
+#terminal a:hover,
+#terminal a:active {
+    color: #3af;
+}
+body.dark-mode #terminal a {
+    color: #6cf;
 }
 /* what you type: subtle, almost a ghost */
 #terminal .terminal-in {
@@ -139,25 +153,29 @@ a:hover, a:active {
 }
 #terminal .terminal-row {
     display: flex;
-    align-items: center;
-    white-space: pre;
+    align-items: baseline;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
 }
 #terminal .terminal-typed {
-    white-space: pre;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    min-width: 0;
 }
 /* the whole point: a blinking cursor, and nothing else */
 #terminal .terminal-caret {
     display: inline-block;
     animation: terminal-blink 1.1s step-end infinite;
     opacity: 0.85;
+    flex: 0 0 auto;
 }
 #terminal .terminal-caret-done {
     animation: none;
     opacity: 0.25;
 }
-/* the real input is invisible and sits on top of the caret row; the caret span
-   stands in for it visually. kept inside the row (not off-screen) so focusing
-   it never scrolls the page. */
+/* the real input is invisible and sits on top of the entire terminal so a tap
+   or click anywhere focuses it. it carries no visible text itself — the mirror
+   span + caret render what's typed. */
 #terminal .terminal-input {
     position: absolute;
     inset: 0;
@@ -172,8 +190,22 @@ a:hover, a:active {
     color: transparent;
     caret-color: transparent;
     outline: none;
+    /* keep iOS from zooming when the (invisible) field focuses */
+    font-size: 16px;
 }
 @keyframes terminal-blink {
     0%, 50% { opacity: 0.85; }
     50.01%, 100% { opacity: 0; }
+}
+
+/* a tall spacer below the terminal lets the input row scroll up to the very
+   bottom of the viewport, so the "prompt" always sits at the screen's edge. */
+#terminal-spacer {
+    height: 70vh;
+}
+
+@media (max-width: 600px) {
+    #terminal {
+        font-size: 15px;
+    }
 }

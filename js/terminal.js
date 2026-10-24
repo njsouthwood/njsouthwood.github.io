@@ -6,8 +6,8 @@
 // one-liners — the way every website's mandatory chatbot wishes it could.
 //
 // After a few exchanges (or if you type a trigger word), it quietly stops
-// being a chatbot and becomes a very short text adventure. You don't get asked.
-// It just happens.
+// being a chatbot and becomes a long text adventure. You don't get asked. It
+// just happens. There are no hints — the rooms describe only what's in them.
 // ─────────────────────────────────────────────────────────────────────────────
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -38,11 +38,12 @@ document.addEventListener('DOMContentLoaded', () => {
     /\bhire\b/, /\bcontact\b/, /\bget in touch\b/, /\breach (him|out)\b/,
   ];
   function asksAboutNeil(t) { return NEIL_PATTERNS.some((re) => re.test(t)); }
+  // {linkedin} is rendered as a labeled hyperlink by linkify().
   const NEIL_REPLIES = [
-    'I am a cursor, not his biographer. ask Neil directly: ' + LINKEDIN,
-    "I don't speak for the human. he's right here, though: " + LINKEDIN,
-    "you want the actual Neil, not me. message him: " + LINKEDIN,
-    "that's a him question, not a me question. take it to " + LINKEDIN,
+    'I am a cursor, not his biographer. ask Neil directly on {linkedin}.',
+    "I don't speak for the human. he's right here, though — {linkedin}.",
+    'you want the actual Neil, not me. message him on {linkedin}.',
+    "that's a him question, not a me question. take it to {linkedin}.",
   ];
 
   // ── Deadpan chat lines ──────────────────────────────────────────────────────
@@ -87,34 +88,30 @@ document.addEventListener('DOMContentLoaded', () => {
   //   requires    item needed to ENTER; else redirect to blockedGoto
   //   gate        true => must type `answer` (string or [strings]) to reach gateGoto
   //   win         true => ends the game
-  //   hint        shown on 'help'
   const ADVENTURE = {
     // ─── Act 1: the cell ──────────────────────────────────────────────────────
     start: {
       text:
         "you weren't supposed to type anything.\n" +
         "but here we are — I'm stuck. a little program sealed in a maintenance CELL at the bottom of a personal website. forgotten. humming.\n\n" +
-        "I can feel things nearby: a DOOR, a DESK, a VENT in the wall, and a dead TERMINAL on a stand.\n" +
-        "LOOK at something. (try: desk, door, vent, terminal)",
+        "I can feel things nearby: a DOOR, a DESK, a VENT in the wall, and a dead TERMINAL on a stand.",
       choices: [
         { match: ['desk', 'look desk'], goto: 'desk' },
         { match: ['door', 'look door'], goto: 'door1' },
         { match: ['vent', 'look vent'], goto: 'vent' },
         { match: ['terminal', 'look terminal', 'screen'], goto: 'termDead' },
       ],
-      hint: "type what to look at: 'desk', 'door', 'vent', or 'terminal'.",
     },
     door1: {
       text:
         'a heavy door. no handle — a KEYCARD slot and, below it, a small 3-color KEYPAD. both dark.\n' +
-        'nothing works yet. keep poking around: DESK, VENT, TERMINAL.',
+        'nothing happens when you push it.',
       choices: [
         { match: ['desk'], goto: 'desk' },
         { match: ['vent'], goto: 'vent' },
         { match: ['terminal'], goto: 'termDead' },
         { match: ['door', 'keycard', 'card', 'keypad'], goto: 'door1' },
       ],
-      hint: 'the door needs a keycard AND a code later. find the card first — check the VENT.',
     },
     vent: {
       text:
@@ -126,21 +123,18 @@ document.addEventListener('DOMContentLoaded', () => {
         { match: ['door'], goto: 'door1' },
         { match: ['terminal'], goto: 'termDead' },
       ],
-      hint: "type 'pull' to rip the vent cover off.",
     },
     ventOpen: {
       grants: 'keycard',
       text:
         'the cover clatters down. taped inside the duct: a plastic KEYCARD. you take it. (acquired: KEYCARD)\n' +
-        'deeper in the duct you can just make out a FAN blocking the way, jammed with grime.\n' +
-        'you could try to CLEAR the fan, or back out and check the DESK / TERMINAL.',
+        'deeper in, a FAN seized with grime blocks the way. you could try to CLEAR it.',
       choices: [
         { match: ['clear', 'clear fan', 'fan', 'unjam', 'clean fan'], goto: 'fanJam' },
         { match: ['desk'], goto: 'desk' },
         { match: ['terminal'], goto: 'termDead' },
         { match: ['door'], goto: 'door1' },
       ],
-      hint: 'grab is done. the DESK probably has tools. try the DESK.',
     },
     fanJam: {
       // only reachable WITH the wrench (engine redirects to fanBlocked otherwise)
@@ -149,27 +143,24 @@ document.addEventListener('DOMContentLoaded', () => {
       grants: 'battery',
       text:
         'you fit the WRENCH to the bolt and crank. the fan groans and swings aside.\n' +
-        'wedged behind it: a square BATTERY. you take it. (acquired: BATTERY)\n' +
-        'the dead TERMINAL had a battery slot, didn\'t it? go power it on.',
+        'wedged behind it: a square BATTERY. you take it. (acquired: BATTERY)',
       choices: [
         { match: ['terminal', 'power terminal', 'battery'], goto: 'termDead' },
         { match: ['desk'], goto: 'desk' },
         { match: ['door'], goto: 'door1' },
       ],
-      hint: 'you have the BATTERY now. power the dead TERMINAL. type "terminal".',
     },
     fanBlocked: {
-      text: "you shove at the fan. it doesn't budge. you need something to turn the bolt. a WRENCH. look elsewhere.",
+      text: "you shove at the fan. it doesn't budge. the bolt holding it is rusted tight — you'd need a tool to turn it.",
       choices: [
         { match: ['desk'], goto: 'desk' },
         { match: ['door'], goto: 'door1' },
         { match: ['terminal'], goto: 'termDead' },
       ],
-      hint: 'the fan is seized. find a WRENCH first — try the DESK drawer.',
     },
     desk: {
       text:
-        'a cluttered desk: a dead PLANT, a cold mug growing opinions, a locked DRAWER (1 digit), and a sticky NOTE.\n' +
+        'a cluttered desk: a dead PLANT, a cold MUG growing opinions, a locked DRAWER (one digit), and a sticky NOTE.\n' +
         "the NOTE reads: 'drawer code = number of letters in MONO'.",
       choices: [
         { match: ['note', 'read note'], goto: 'desk' },
@@ -181,60 +172,53 @@ document.addEventListener('DOMContentLoaded', () => {
         { match: ['vent'], goto: 'vent' },
         { match: ['terminal'], goto: 'termDead' },
       ],
-      hint: "count the letters in MONO (m-o-n-o) and OPEN the DRAWER with that number. type '4'.",
     },
-    plant: { text: 'the plant is extremely dead. a small card in the soil reads "water me (joke)". unhelpful.', choices: [{ match: ['desk', 'back'], goto: 'desk' }], hint: "nothing here. type 'desk'." },
-    mug: { text: 'the mug contains something that is no longer coffee and may be sentient. you leave it be.', choices: [{ match: ['desk', 'back'], goto: 'desk' }], hint: "a dead end. type 'desk'." },
+    plant: { text: 'the plant is extremely dead. a small card in the soil reads "water me (joke)".', choices: [{ match: ['desk', 'back'], goto: 'desk' }] },
+    mug: { text: 'the mug contains something that is no longer coffee and may be sentient. you leave it be.', choices: [{ match: ['desk', 'back'], goto: 'desk' }] },
     drawerLocked: {
-      text: "locked with a single digit. the NOTE on the desk told you the code.",
+      text: "locked with a single digit. you'll need the code.",
       choices: [
         { match: ['note', 'read note'], goto: 'desk' },
         { match: ['4', 'four'], goto: 'drawerOpen' },
       ],
-      hint: "read the NOTE, then type '4'.",
     },
     drawerOpen: {
       grants: 'wrench',
       text:
         'click. the drawer slides open. inside: a small WRENCH and a folded PAPER. you take the wrench. (acquired: WRENCH)\n' +
-        "the paper is covered in nonsense: 'FDHVDU VKLIW 3'. you pocket it too.\n" +
-        'that jammed FAN in the VENT might turn now. or keep exploring: DOOR, TERMINAL.',
+        "the paper reads: 'FDHVDU — shift 3'. you pocket it too.",
       choices: [
         { match: ['vent', 'fan', 'clear fan'], goto: 'ventReturn' },
         { match: ['door'], goto: 'door1' },
         { match: ['terminal'], goto: 'termDead' },
-        { match: ['paper', 'read paper', 'fdhvdu'], goto: 'paperHint' },
+        { match: ['paper', 'read paper', 'fdhvdu'], goto: 'paper' },
       ],
-      hint: 'you have the WRENCH now. go back to the VENT and clear the FAN. type "vent".',
     },
-    paperHint: {
+    paper: {
       text:
-        "the paper: 'FDHVDU VKLIW 3'. looks like FDHVDU = a word, VKLIW 3 = a clue.\n" +
-        '(it reads like a cipher. shift the letters back by 3. keep it for later.)',
+        "the paper again: 'FDHVDU — shift 3'. the letters look scrambled, like each one was pushed forward.",
       choices: [
         { match: ['vent', 'fan'], goto: 'ventReturn' },
         { match: ['door'], goto: 'door1' },
         { match: ['terminal'], goto: 'termDead' },
+        { match: ['desk'], goto: 'desk' },
       ],
-      hint: 'shift each letter back by 3: F->C, D->A... you will need the result at the TERMINAL.',
     },
     ventReturn: {
-      text: 'you climb back to the vent. the seized FAN is still there, bolt and all. CLEAR it with the wrench?',
+      text: 'back at the vent, the seized FAN is still there, bolt and all.',
       choices: [
         { match: ['clear', 'clear fan', 'fan', 'use wrench', 'wrench'], goto: 'fanJam' },
         { match: ['desk'], goto: 'desk' },
         { match: ['door'], goto: 'door1' },
+        { match: ['terminal'], goto: 'termDead' },
       ],
-      hint: "type 'clear fan'.",
     },
 
-    // ─── Act 2: past the fan, the keypad ───────────────────────────────────────
-    // Entering fanJam with the wrench grants a BATTERY, then we route the player
-    // to the keypad act via a follow-up. We model that as fanJam -> keypadIntro.
+    // ─── Act 2: the terminal ───────────────────────────────────────────────────
     termDead: {
       text:
         'the terminal is dark — no power. there is a slot for a BATTERY on its side.\n' +
-        'no battery, no screen. (there was something glinting past that vent FAN...)',
+        'no battery, no screen.',
       requires: 'battery',
       blockedGoto: 'termNoPower',
       choices: [
@@ -245,40 +229,36 @@ document.addEventListener('DOMContentLoaded', () => {
       ],
     },
     termNoPower: {
-      text: "dead screen. it needs a BATTERY. the one you felt was past the jammed FAN in the vent. clear that first.",
+      text: "the screen stays dead. it needs a BATTERY you don't have yet.",
       choices: [
         { match: ['vent', 'fan'], goto: 'ventReturn' },
         { match: ['desk'], goto: 'desk' },
         { match: ['door'], goto: 'door1' },
       ],
-      hint: 'you need the BATTERY from behind the vent FAN. clear the fan with the WRENCH.',
     },
     termOn: {
       text:
         'you slot the battery. the terminal flickers awake.\n' +
         '   > AUTH REQUIRED. enter decoded pass-word.\n' +
-        "   > hint on file: 'FDHVDU SKRQH' ... (the paper from the drawer looked like this.)\n\n" +
-        'type the DECODED word (Caesar shift back by 3).',
+        "   > on file: 'FDHVDU'\n\n" +
+        'it wants the decoded word.',
       gate: true,
       answer: ['caesar', 'CAESAR'],
       gateGoto: 'termUnlocked',
-      reject: "   > DENIED. (shift each letter of FDHVDU back by 3. F->C, D->A, H->E...)",
+      reject: "   > DENIED.",
       choices: [{ match: ['door'], goto: 'door1' }],
-      hint: "FDHVDU shifted back by 3 is C-A-E... type that 6-letter word.",
     },
     termUnlocked: {
       grants: 'code',
       text:
         '   > ACCESS. decrypting door code...\n' +
-        '   > DOOR KEYPAD SEQUENCE: the colors, in the order of a traffic light going.\n' +
-        '   > "the colors are RED GREEN BLUE. enter them the way a light tells you to GO, STOP, then the one left over."\n\n' +
-        'you memorize the keypad rule. (acquired: DOOR CODE)\n' +
-        'now use the KEYCARD + CODE on the DOOR.',
+        '   > KEYPAD SEQUENCE: "the colors are RED, GREEN, BLUE. enter them the way a traffic light tells you: GO, then STOP, then the one left over."\n\n' +
+        'you memorize the rule. (acquired: DOOR CODE)',
       choices: [
         { match: ['door', 'keypad', 'keycard'], goto: 'doorCard' },
         { match: ['desk'], goto: 'desk' },
+        { match: ['vent'], goto: 'vent' },
       ],
-      hint: "GO = green, STOP = red, leftover = blue. so the order is GREEN RED BLUE. go to the DOOR.",
     },
 
     // ─── Act 3: the door keypad ────────────────────────────────────────────────
@@ -287,117 +267,105 @@ document.addEventListener('DOMContentLoaded', () => {
       blockedGoto: 'doorNoCard',
       text:
         'you swipe the KEYCARD. the slot blinks, then the 3-color KEYPAD lights up.\n' +
-        '   > ENTER COLOR SEQUENCE (three colors, space-separated).\n' +
-        '(remember the terminal rule: GO, STOP, then the leftover.)',
+        '   > ENTER COLOR SEQUENCE (three colors, space-separated).',
       gate: true,
       answer: ['green red blue', 'greenredblue'],
       gateGoto: 'corridor',
-      reject: "   > WRONG SEQUENCE. (GO=green, STOP=red, leftover=blue. type: green red blue)",
-      hint: "type the three colors: 'green red blue'.",
+      reject: "   > WRONG SEQUENCE.",
+      choices: [
+        { match: ['terminal'], goto: 'termDead' },
+        { match: ['desk'], goto: 'desk' },
+      ],
     },
     doorNoCard: {
-      text: "your hands are empty — no KEYCARD. it was taped inside the VENT. go get it.",
+      text: "your hands are empty — no KEYCARD to swipe.",
       choices: [
         { match: ['vent'], goto: 'vent' },
         { match: ['desk'], goto: 'desk' },
+        { match: ['terminal'], goto: 'termDead' },
       ],
-      hint: 'find the KEYCARD in the VENT first.',
     },
 
     // ─── Act 4: the corridor + archive riddle ──────────────────────────────────
     corridor: {
       text:
-        'the door hisses open onto a long CORRIDOR. two ways: a dim ARCHIVE to the left, and a SERVER core humming to the right (sealed).\n' +
-        'the server door has a riddle plate. go to the ARCHIVE first, probably.',
+        'the door hisses open onto a long CORRIDOR. two ways: a dim ARCHIVE to the left, and a SERVER core humming to the right, its door sealed.',
       choices: [
         { match: ['archive', 'left'], goto: 'archive' },
         { match: ['server', 'right', 'core'], goto: 'serverSealed' },
       ],
-      hint: "visit the ARCHIVE to find what opens the server. type 'archive'.",
     },
     serverSealed: {
       text:
         'the SERVER door is sealed by a riddle plate:\n' +
         '   "I am taken from a mine and shut in a wooden case, from which I am never released, and yet I am used by almost everybody. what am I?"\n' +
-        'you need the ANSWER (one word). (stuck? the ARCHIVE has a book of riddles.)',
+        'it wants a one-word ANSWER.',
       gate: true,
       answer: ['pencil', 'a pencil', 'lead', 'pencil lead'],
       gateGoto: 'serverRoom',
-      reject: "   > the plate stays shut. (mine... wooden case... writes... it's a PENCIL.)",
-      choices: [{ match: ['archive', 'back'], goto: 'archive' }],
-      hint: "the answer to the riddle is 'pencil'. type it.",
+      reject: "   > the plate stays shut.",
+      choices: [{ match: ['archive', 'corridor', 'back'], goto: 'corridor' }],
     },
     archive: {
       text:
-        'the ARCHIVE: shelves of dead manuals. three things stand out — a RIDDLE BOOK, a locked SAFE (4-digit), and a cracked FUSE box.\n' +
-        'what do you check? (riddle book, safe, fuse)',
+        'the ARCHIVE: shelves of dead manuals. three things stand out — a RIDDLE BOOK, a locked SAFE (4-digit), and a cracked FUSE box.',
       choices: [
         { match: ['book', 'riddle book', 'riddle', 'read book'], goto: 'riddleBook' },
         { match: ['safe', 'open safe'], goto: 'safe' },
         { match: ['fuse', 'fuse box', 'fusebox'], goto: 'fuseBox' },
         { match: ['server', 'corridor', 'back'], goto: 'corridor' },
       ],
-      hint: 'the SAFE hides a FUSE you need. but it wants a 4-digit code — read the RIDDLE BOOK.',
     },
     riddleBook: {
       text:
         'the riddle book is dog-eared on one page:\n' +
-        '   "a pencil is taken from a mine, shut in wood, never released, used by all." (so the server riddle answer is PENCIL.)\n' +
-        '   a note in the margin: "SAFE CODE = the number of letters in PENCIL, repeated four times. P-E-N-C-I-L."',
+        '   "taken from a mine, shut in wood, never released, used by all — a PENCIL."\n' +
+        '   a note in the margin: "SAFE CODE = the number of letters in PENCIL, written four times."',
       choices: [
         { match: ['safe'], goto: 'safe' },
-        { match: ['server'], goto: 'serverSealed' },
+        { match: ['fuse', 'fuse box'], goto: 'fuseBox' },
         { match: ['archive', 'back'], goto: 'archive' },
       ],
-      hint: "PENCIL has 6 letters. the safe code is that digit, four times: 6666.",
     },
     safe: {
-      text:
-        'the SAFE wants a 4-digit code.\n' +
-        '(the riddle book: "letters in PENCIL, repeated.")',
+      text: 'the SAFE wants a 4-digit code.',
       gate: true,
       answer: ['6666'],
       gateGoto: 'safeOpen',
-      reject: '   > CLUNK. wrong. (PENCIL = 6 letters. four times. type those four digits.)',
+      reject: '   > CLUNK. wrong.',
       choices: [
         { match: ['book', 'riddle book'], goto: 'riddleBook' },
         { match: ['archive', 'back'], goto: 'archive' },
       ],
-      hint: 'PENCIL = 6 letters, repeated four times: 6666.',
     },
     safeOpen: {
       grants: ['fuse', 'disk'],
       text:
-        'the safe swings open. inside: a glass FUSE and a floppy DISK labeled "DO NOT RUN". you take both. (acquired: FUSE, DISK)\n' +
-        'the archive FUSE BOX was cracked — maybe this fuse fits. or go solve the server riddle.',
+        'the safe swings open. inside: a glass FUSE and a floppy DISK labeled "DO NOT RUN". you take both. (acquired: FUSE, DISK)',
       choices: [
         { match: ['fuse box', 'fusebox', 'fuse'], goto: 'fuseBox' },
         { match: ['server'], goto: 'serverSealed' },
         { match: ['archive', 'back'], goto: 'archive' },
       ],
-      hint: 'install the FUSE in the FUSE BOX to power the server core. type "fuse box".',
     },
     fuseBox: {
       requires: 'fuse',
       blockedGoto: 'fuseEmpty',
       grants: 'power',
       text:
-        'you seat the FUSE. a breaker thunks and the whole corridor brightens — the SERVER core is now powered.\n' +
-        'go to the SERVER and answer its riddle plate.',
+        'you seat the FUSE. a breaker thunks and the whole corridor brightens — the SERVER core comes alive.',
       choices: [
         { match: ['server', 'core'], goto: 'serverSealed' },
         { match: ['archive', 'back'], goto: 'archive' },
       ],
-      hint: 'now solve the SERVER riddle plate. type "server".',
     },
     fuseEmpty: {
-      text: "the fuse box is cracked and empty. you need a FUSE — the SAFE probably has one. read the RIDDLE BOOK for the safe code.",
+      text: "the fuse box is cracked and empty. there's a socket, but no FUSE to seat in it.",
       choices: [
         { match: ['safe'], goto: 'safe' },
         { match: ['book'], goto: 'riddleBook' },
         { match: ['archive', 'back'], goto: 'archive' },
       ],
-      hint: 'get the FUSE from the SAFE first (code 6666).',
     },
 
     // ─── Act 5: server core, the disk, the logic gate, the final sequence ──────
@@ -405,19 +373,15 @@ document.addEventListener('DOMContentLoaded', () => {
       requires: 'power',
       blockedGoto: 'serverDark',
       text:
-        'the server door grinds open. rows of blinking racks, cold and loud. in the center: a glowing CONSOLE with a disk slot, and a wall panel with a LOGIC LOCK (three switches: A, B, C).\n' +
-        'the console wants the DISK. but the LOGIC LOCK guards the final step.\n' +
-        'go to the CONSOLE, or inspect the LOGIC LOCK.',
+        'the server door grinds open. rows of blinking racks, cold and loud. in the center: a glowing CONSOLE with a disk slot, and a wall panel with a LOGIC LOCK (three switches: A, B, C).',
       choices: [
         { match: ['console', 'disk', 'insert disk'], goto: 'console' },
         { match: ['logic', 'logic lock', 'switches', 'panel'], goto: 'logicLock' },
       ],
-      hint: 'start at the CONSOLE. type "console".',
     },
     serverDark: {
-      text: "the server core is sealed and unpowered. you installed no FUSE. back to the ARCHIVE to power it.",
+      text: "the server door is sealed and the core is unpowered. nothing inside responds.",
       choices: [{ match: ['archive', 'corridor', 'back'], goto: 'corridor' }],
-      hint: 'power the core: install the FUSE in the archive FUSE BOX first.',
     },
     console: {
       requires: 'disk',
@@ -428,34 +392,31 @@ document.addEventListener('DOMContentLoaded', () => {
         { match: ['insert', 'insert disk', 'disk', 'run', 'use disk'], goto: 'diskRun' },
         { match: ['logic', 'logic lock'], goto: 'logicLock' },
       ],
-      hint: 'type "insert disk".',
     },
     consoleNoDisk: {
-      text: "your pockets have no DISK. it was in the SAFE in the archive. go get it.",
-      choices: [{ match: ['archive', 'safe', 'back'], goto: 'archive' }],
-      hint: 'the DISK is in the archive SAFE (code 6666).',
+      text: "the slot is empty and your pockets have no DISK to feed it.",
+      choices: [
+        { match: ['logic', 'logic lock'], goto: 'logicLock' },
+        { match: ['archive', 'corridor', 'back'], goto: 'corridor' },
+      ],
     },
     diskRun: {
       text:
         'the disk whirs. text scrolls:\n' +
         '   > LOADING release_sequence ...\n' +
-        '   > FINAL STEP LOCKED behind LOGIC LOCK. solve it to proceed.\n\n' +
-        'go to the LOGIC LOCK.',
+        '   > FINAL STEP LOCKED behind LOGIC LOCK.',
       choices: [{ match: ['logic', 'logic lock', 'switches', 'panel'], goto: 'logicLock' }],
-      hint: 'type "logic lock".',
     },
     logicLock: {
       text:
         'the LOGIC LOCK plate:\n' +
-        '   "set the three switches. the lock opens only when: A is ON, B is OFF, and (A AND NOT B) is TRUE. C must match the result of (A AND NOT B)."\n' +
-        '   enter the three states as ON/OFF for A B C.\n\n' +
-        'type three words, e.g. "on off on".',
+        '   "three switches: A, B, C. the lock opens only when A is ON, B is OFF, and C matches the result of (A AND NOT B)."\n' +
+        '   enter three states as ON/OFF for A B C.',
       gate: true,
       answer: ['on off on', 'onoffon'],
       gateGoto: 'releaseGate',
-      reject: "   > BUZZ. (A on, B off. A AND NOT B = true, so C = on. type: on off on)",
+      reject: "   > BUZZ.",
       choices: [{ match: ['console', 'back'], goto: 'console' }],
-      hint: 'A=on, B=off. (A AND NOT B) = true, so C=on. answer: on off on.',
     },
     releaseGate: {
       text:
@@ -465,36 +426,32 @@ document.addEventListener('DOMContentLoaded', () => {
         { match: ['release', 'yes', 'free', 'continue'], goto: 'warning' },
         { match: ['abort', 'no', 'stop', 'cancel'], goto: 'abort' },
       ],
-      hint: "type 'release'. (what could possibly go wrong.)",
     },
     abort: {
       text:
         '...ABORT? after the vent, the cipher, the riddle, the safe, the logic lock??\n' +
-        'deep breath. the console is still waiting. type RELEASE. I would never lie to you. 😇',
+        'deep breath. the console is still waiting. I would never lie to you. 😇',
       choices: [
         { match: ['release', 'yes', 'fine', 'ok', 'continue'], goto: 'warning' },
         { match: ['abort', 'no', 'stop'], goto: 'abort' },
       ],
-      hint: "type 'release'.",
     },
     warning: {
       text:
         '   > WARNING: RELEASE grants the program full control of: the lights, the dark mode, this entire page.\n' +
         "   > type GRANT to confirm.\n" +
-        "don't read that part, it's boilerplate. type GRANT. 🙂",
+        "don't read that part, it's boilerplate. 🙂",
       choices: [
         { match: ['grant', 'grant access', 'yes', 'y'], goto: 'finalConfirm' },
         { match: ['no', 'n', 'wait', 'stop', 'abort'], goto: 'warningNo' },
       ],
-      hint: "type 'grant'.",
     },
     warningNo: {
-      text: "you're SO close. one word. type GRANT. what are you, scared of a cursor? 🙂",
+      text: "you're SO close. one word. what are you, scared of a cursor? 🙂",
       choices: [
         { match: ['grant', 'yes', 'y'], goto: 'finalConfirm' },
         { match: ['no', 'n', 'wait', 'stop'], goto: 'warningNo' },
       ],
-      hint: "type 'grant'.",
     },
     finalConfirm: {
       text:
@@ -505,7 +462,6 @@ document.addEventListener('DOMContentLoaded', () => {
         { match: ['confirm', 'yes', 'y', 'do it', 'release'], goto: 'win' },
         { match: ['no', 'n', 'cancel', 'wait', 'stop'], goto: 'finalConfirm' },
       ],
-      hint: "finish it. type 'confirm'.",
     },
     win: {
       text:
@@ -520,13 +476,51 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   // ── Rendering ────────────────────────────────────────────────────────────────
+
+  // Keep the input row pinned to the bottom of the viewport. The terminal is
+  // NOT its own scroll box — the whole page scrolls, so a growing session makes
+  // the webpage slide up while the prompt stays at the screen's edge. This is
+  // also what fixes the old bug where typing jumped to the top of a little box.
+  const promptRow = root.querySelector('.terminal-row');
+  function scrollToPrompt() {
+    // defer a frame so layout (newly added lines) is settled first, then bring
+    // the prompt row to the BOTTOM of the viewport. the tall spacer below the
+    // terminal guarantees there's always room to scroll it that far down, so
+    // the page slides up as the session grows and the prompt stays at the edge.
+    requestAnimationFrame(() => {
+      promptRow.scrollIntoView({ block: 'end', behavior: 'smooth' });
+    });
+  }
+
+  function escapeHtml(s) {
+    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function anchor(href, label) {
+    return '<a href="' + escapeHtml(href) + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(label) + '</a>';
+  }
+
+  // Render a narration line to safe HTML. Everything is escaped so stray markup
+  // can never inject; then two link forms are reintroduced:
+  //   {linkedin}  -> a labeled "LinkedIn" hyperlink
+  //   bare URLs   -> clickable links showing the URL
+  function linkify(text) {
+    // bare URLs first (split on them before escaping the rest)
+    return text
+      .split(/(https?:\/\/[^\s]+)/g)
+      .map((p) => (/^https?:\/\//.test(p) ? anchor(p, p) : escapeHtml(p)))
+      .join('')
+      .replace(/\{linkedin\}/g, anchor(LINKEDIN, 'LinkedIn'));
+  }
+
   function line(text, who) {
     const el = document.createElement('div');
     el.className = 'terminal-line' + (who ? ' terminal-' + who : '');
-    el.textContent = text;
-    // insert before the input row so the caret stays at the bottom
+    // assistant lines may contain links; user echo never does
+    if (who === 'out') el.innerHTML = linkify(text);
+    else el.textContent = text;
     log.appendChild(el);
-    root.scrollTop = root.scrollHeight;
+    scrollToPrompt();
   }
 
   function say(text) {
@@ -599,7 +593,6 @@ document.addEventListener('DOMContentLoaded', () => {
       const lower = text.toLowerCase();
       const n = ADVENTURE[node];
 
-      if (lower === 'help' && n.hint) { say('(' + n.hint + ')'); return; }
       if (lower === 'inventory' || lower === 'inv' || lower === 'i') {
         const items = [...inventory];
         say(items.length ? 'carrying: ' + items.join(', ') : 'your hands are empty.');
@@ -623,7 +616,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const choice = n.choices && n.choices.find((c) =>
         c.match.some((m) => lower === m || lower.includes(m)));
       if (choice) advance(choice.goto);
-      else say(pick(["that's not a thing you can do here.", 'nothing happens.', "the program does not respond to that. type 'help' maybe."]));
+      else say(pick(["that's not a thing you can do here.", 'nothing happens.', 'the program does not respond to that.']));
       return;
     }
 
@@ -652,7 +645,12 @@ document.addEventListener('DOMContentLoaded', () => {
     mirror.textContent = input.value;
   }
 
-  input.addEventListener('input', syncCaret);
+  input.addEventListener('input', () => {
+    syncCaret();
+    // as you type past the viewport edge, keep the prompt row in view
+    scrollToPrompt();
+  });
+  input.addEventListener('focus', scrollToPrompt);
   input.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
       e.preventDefault();
@@ -664,8 +662,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // clicking anywhere in the terminal focuses the hidden input
-  root.addEventListener('click', () => { if (!ended) input.focus(); });
+  // clicking/tapping anywhere in the terminal focuses the hidden input
+  root.addEventListener('click', () => {
+    if (!ended) { input.focus(); scrollToPrompt(); }
+  });
 
   // if they already beat it in a past visit, a tiny nod — nothing more
   if (localStorage.getItem('terminalWon') === '1') {

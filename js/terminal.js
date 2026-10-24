@@ -26,7 +26,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let ended = false;           // true once the adventure is won (input disabled)
 
   const TRIGGER_COUNT = 4;
-  const TRIGGER_WORDS = ['adventure', 'game', 'hello?', 'are you real', 'who are you', 'help me'];
+  const TRIGGER_WORDS = ['adventure', 'game', 'are you real', 'help me'];
 
   const LINKEDIN = 'https://www.linkedin.com/in/neilsouthwood/';
   // crude but effective: catch people asking about Neil and point them at the
@@ -46,6 +46,36 @@ document.addEventListener('DOMContentLoaded', () => {
     "that's a him question, not a me question. take it to {linkedin}.",
   ];
 
+  // "what is this / what are you / what's going on" — self-referential questions
+  // about the cursor/box itself. answered literally, deadpan.
+  const WHATIS_PATTERNS = [
+    /what('?s| is| are)?\s*(this|that|you|it|going on|happening|here)\b/,
+    /what('?s| is) (this|it)\??$/,
+    /who are you/, /what do you do/, /what is (this|it) for/,
+    /\bwhat('?s| is) this (thing|box|cursor|site|page|website)\b/,
+  ];
+  function asksWhatIsThis(t) { return WHATIS_PATTERNS.some((re) => re.test(t)); }
+  const WHATIS_REPLIES = [
+    'it looks like a blinking cursor.',
+    'a blinking cursor. that is the whole feature.',
+    "it's a cursor. it blinks. that's it, really.",
+    'hard to say. looks like a cursor to me.',
+  ];
+
+  // greetings — casual, minimal, one breath.
+  const GREETING_PATTERNS = [
+    /^(hi|hey|hello|hiya|yo|sup|wassup|whats up|what's up|howdy|heya|hey there|hello there|greetings|good (morning|afternoon|evening))\b/,
+  ];
+  function isGreeting(t) { return GREETING_PATTERNS.some((re) => re.test(t)); }
+  const GREETING_REPLIES = [
+    'hey.',
+    "hey, what's up.",
+    'yo.',
+    'sup.',
+    'hey there.',
+    'hi.',
+  ];
+
   // ── Deadpan chat lines ──────────────────────────────────────────────────────
   const REPLIES = [
     'ok.',
@@ -63,10 +93,10 @@ document.addEventListener('DOMContentLoaded', () => {
   ];
   const QUESTION_REPLIES = [
     "I don't know. I'm a blinking cursor.",
-    "that's above my pay grade. my pay is zero.",
-    'unclear. try asking the void. same result, nicer view.',
-    'good question. no.',
-    'probably. probably not. hard to say from down here.',
+    "that's above my pay grade.",
+    'unclear. try googling it?',
+    'good question. no idea.',
+    'hard to say.',
   ];
 
   function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
@@ -160,7 +190,7 @@ document.addEventListener('DOMContentLoaded', () => {
     },
     desk: {
       text:
-        'a cluttered desk: a dead PLANT, a cold MUG growing opinions, a locked DRAWER (one digit), and a sticky NOTE.\n' +
+        'a cluttered desk: a dead PLANT, a cold MUG growing mold, a locked DRAWER (one digit), and a sticky NOTE.\n' +
         "the NOTE reads: 'drawer code = number of letters in MONO'.",
       choices: [
         { match: ['note', 'read note'], goto: 'desk' },
@@ -631,6 +661,18 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
+    // a greeting gets a casual, minimal reply.
+    if (isGreeting(lower)) {
+      say(pick(GREETING_REPLIES));
+      return;
+    }
+
+    // "what is this / who are you" gets a literal, deadpan answer.
+    if (asksWhatIsThis(lower)) {
+      say(pick(WHATIS_REPLIES));
+      return;
+    }
+
     const wordHit = TRIGGER_WORDS.some((w) => lower.includes(w));
     if (wordHit || messageCount >= TRIGGER_COUNT) {
       say('wait.');
@@ -662,9 +704,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // clicking/tapping anywhere in the terminal focuses the hidden input
-  root.addEventListener('click', () => {
-    if (!ended) { input.focus(); scrollToPrompt(); }
+  // clicking/tapping anywhere in the terminal focuses the hidden input — except
+  // when the click lands on a link, so hyperlinks (e.g. LinkedIn) stay clickable.
+  root.addEventListener('click', (e) => {
+    if (ended) return;
+    if (e.target.closest('a')) return;
+    input.focus();
+    scrollToPrompt();
   });
 
   // if they already beat it in a past visit, a tiny nod — nothing more

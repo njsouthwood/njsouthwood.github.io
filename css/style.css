@@ -173,9 +173,14 @@ body.dark-mode #terminal a {
     animation: none;
     opacity: 0.25;
 }
-/* the real input is invisible and sits on top of the entire terminal so a tap
-   or click anywhere focuses it. it carries no visible text itself — the mirror
-   span + caret render what's typed. */
+/* the prompt row is the positioning context for the invisible input */
+#terminal .terminal-row {
+    position: relative;
+}
+/* the real input is invisible and covers ONLY the prompt row (not the whole
+   terminal) so it doesn't sit on top of — and swallow clicks to — the log
+   lines above it, including links. it carries no visible text itself; the
+   mirror span + caret render what's typed. */
 #terminal .terminal-input {
     position: absolute;
     inset: 0;

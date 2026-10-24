@@ -1,0 +1,6 @@
+# local secrets — the plaintext terminal-game answers live here, never commit
+.env.local
+.env
+
+# os / editor cruft
+.DS_Store

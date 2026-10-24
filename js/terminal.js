@@ -24,6 +24,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let node = null;             // null = chat mode; otherwise an adventure node id
   const inventory = new Set(); // items picked up this run
   let ended = false;           // true once the adventure is won (input disabled)
+  let engaged = false;         // true after the user first types/taps (gates auto-scroll)
 
   const TRIGGER_COUNT = 4;
   const TRIGGER_WORDS = ['adventure', 'game', 'are you real', 'help me'];
@@ -794,11 +795,16 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   input.addEventListener('input', () => {
+    engaged = true;
     syncCaret();
     // as you type past the viewport edge, keep the prompt row in view
     scrollToPrompt();
   });
-  input.addEventListener('focus', scrollToPrompt);
+  input.addEventListener('focus', () => {
+    // don't yank the page down on the initial auto-focus — only once the user
+    // has actually engaged (typed or tapped) do we pin the prompt to the bottom.
+    if (engaged) scrollToPrompt();
+  });
   input.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
       e.preventDefault();
@@ -815,8 +821,18 @@ document.addEventListener('DOMContentLoaded', () => {
   root.addEventListener('click', (e) => {
     if (ended) return;
     if (e.target.closest('a')) return;
+    engaged = true;
     input.focus();
     scrollToPrompt();
   });
+
+  // auto-focus the prompt on load so you can just start typing — but without
+  // scrolling the page down to it, so the minimalist "lone cursor at the bottom"
+  // look is preserved until the user actually engages.
+  try {
+    input.focus({ preventScroll: true });
+  } catch (e) {
+    input.focus();
+  }
 
 });

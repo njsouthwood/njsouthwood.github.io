@@ -24,6 +24,14 @@ document.addEventListener('DOMContentLoaded', () => {
   const inventory = new Set(); // items picked up this run
   let ended = false;           // true once the adventure is won (input disabled)
   let engaged = false;         // true after the user first types/taps (gates auto-scroll)
+  const visited = new Set();   // adventure node ids you've arrived at this run
+  let here = null;             // the current room as it looked when you arrived
+
+  // What variant conditions can ask about: items you hold, places you've been.
+  const world = {
+    has: (item) => inventory.has(item),
+    seen: (id) => visited.has(id),
+  };
 
   const TRIGGER_COUNT = 4;
   const TRIGGER_WORDS = ['adventure', 'game', 'are you real', 'help me'];
@@ -167,6 +175,12 @@ DRAWER_CODE_HASH='5a428bd6ebf276771ef1e8c0a30e6026e225c1ce69433502bd4e1639707383
   //   requires    item needed to ENTER; else redirect to blockedGoto
   //   gate        true => must type `answer` (string or [strings]) to reach gateGoto
   //   win         true => ends the game
+  //   variants    [{ when: (world) => bool, ...overrides }] — the first variant
+  //               whose `when` is true overrides the node's fields (text,
+  //               choices, gate, ...). `world.has(item)` / `world.seen(nodeId)`.
+  //               a variant with `redirect: 'otherNode'` sends you there instead.
+  //               `seen` is checked BEFORE this arrival is recorded, so
+  //               seen('thisNode') means "you've been here before".
   const ADVENTURE = {
     // ─── Act 1: the cell ──────────────────────────────────────────────────────
     start: {
@@ -180,6 +194,13 @@ DRAWER_CODE_HASH='5a428bd6ebf276771ef1e8c0a30e6026e225c1ce69433502bd4e1639707383
         { match: ['vent', 'look vent'], goto: 'vent' },
         { match: ['terminal', 'look terminal', 'screen'], goto: 'termDead' },
       ],
+      variants: [
+        {
+          // coming "back" to the cell: a quick look around, not the whole intro
+          when: (w) => w.seen('start'),
+          text: 'the CELL. a DOOR, a DESK, a VENT in the wall, and a TERMINAL on a stand.',
+        },
+      ],
     },
     door1: {
       text:
@@ -189,7 +210,22 @@ DRAWER_CODE_HASH='5a428bd6ebf276771ef1e8c0a30e6026e225c1ce69433502bd4e1639707383
         { match: ['desk'], goto: 'desk' },
         { match: ['vent'], goto: 'vent' },
         { match: ['terminal'], goto: 'termDead' },
-        { match: ['door', 'keycard', 'card', 'keypad'], goto: 'door1' },
+        { match: ['keycard', 'swipe', 'card', 'keypad', 'slot'], goto: 'doorCard' },
+        { match: ['door', 'push'], goto: 'door1' },
+        { match: ['back', 'cd -'], goto: 'start' },
+      ],
+      variants: [
+        {
+          when: (w) => w.seen('corridor'),
+          text: 'the heavy door stands open. beyond it, the CORRIDOR.',
+          choices: [
+            { match: ['corridor', 'through', 'enter', 'go in', 'door'], goto: 'corridor' },
+            { match: ['desk'], goto: 'desk' },
+            { match: ['vent'], goto: 'vent' },
+            { match: ['terminal'], goto: 'termDead' },
+            { match: ['back', 'cd -'], goto: 'start' },
+          ],
+        },
       ],
     },
     vent: {
@@ -201,6 +237,32 @@ DRAWER_CODE_HASH='5a428bd6ebf276771ef1e8c0a30e6026e225c1ce69433502bd4e1639707383
         { match: ['desk'], goto: 'desk' },
         { match: ['door'], goto: 'door1' },
         { match: ['terminal'], goto: 'termDead' },
+        { match: ['back', 'cd -'], goto: 'start' },
+      ],
+      variants: [
+        {
+          // fan cleared: nothing left here
+          when: (w) => w.has('battery'),
+          text: 'the vent cover lies on the floor and the FAN hangs loose on its bolt. the duct is empty now.',
+          choices: [
+            { match: ['desk'], goto: 'desk' },
+            { match: ['door'], goto: 'door1' },
+            { match: ['terminal'], goto: 'termDead' },
+            { match: ['back', 'cd -'], goto: 'start' },
+          ],
+        },
+        {
+          // cover pulled, fan still jammed
+          when: (w) => w.has('keycard'),
+          text: 'the vent cover lies on the floor. deeper in, the seized FAN still blocks the duct, bolt and all.',
+          choices: [
+            { match: ['clear', 'clear fan', 'fan', 'unjam', 'clean fan', 'use wrench', 'wrench'], goto: 'fanJam' },
+            { match: ['desk'], goto: 'desk' },
+            { match: ['door'], goto: 'door1' },
+            { match: ['terminal'], goto: 'termDead' },
+            { match: ['back', 'cd -'], goto: 'start' },
+          ],
+        },
       ],
     },
     ventOpen: {
@@ -213,6 +275,7 @@ DRAWER_CODE_HASH='5a428bd6ebf276771ef1e8c0a30e6026e225c1ce69433502bd4e1639707383
         { match: ['desk'], goto: 'desk' },
         { match: ['terminal'], goto: 'termDead' },
         { match: ['door'], goto: 'door1' },
+        { match: ['back', 'cd -'], goto: 'vent' },
       ],
     },
     fanJam: {
@@ -227,11 +290,13 @@ DRAWER_CODE_HASH='5a428bd6ebf276771ef1e8c0a30e6026e225c1ce69433502bd4e1639707383
         { match: ['terminal', 'power terminal', 'battery'], goto: 'termDead' },
         { match: ['desk'], goto: 'desk' },
         { match: ['door'], goto: 'door1' },
+        { match: ['back', 'cd -'], goto: 'vent' },
       ],
     },
     fanBlocked: {
       text: "you shove at the fan. it doesn't budge. the bolt holding it is rusted tight — you'd need a tool to turn it.",
       choices: [
+        { match: ['vent', 'back', 'cd -'], goto: 'vent' },
         { match: ['desk'], goto: 'desk' },
         { match: ['door'], goto: 'door1' },
         { match: ['terminal'], goto: 'termDead' },
@@ -249,18 +314,25 @@ DRAWER_CODE_HASH='5a428bd6ebf276771ef1e8c0a30e6026e225c1ce69433502bd4e1639707383
         { match: ['door'], goto: 'door1' },
         { match: ['vent'], goto: 'vent' },
         { match: ['terminal'], goto: 'termDead' },
+        { match: ['back', 'cd -'], goto: 'start' },
+      ],
+      variants: [
+        {
+          when: (w) => w.has('wrench'),
+          text: 'a cluttered desk: a dead PLANT, a cold MUG growing mold, the DRAWER hanging open and empty, and the old Motorola flip PHONE.',
+        },
       ],
     },
-    plant: { text: 'the plant is extremely dead. a small card in the soil reads "water me".', choices: [{ match: ['desk', 'back'], goto: 'desk' }] },
-    mug: { text: 'the mug contains something that is no longer coffee and may be sentient. you leave it be.', choices: [{ match: ['desk', 'back'], goto: 'desk' }] },
+    plant: { text: 'the plant is extremely dead. a small card in the soil reads "water me".', choices: [{ match: ['desk', 'back', 'cd -'], goto: 'desk' }] },
+    mug: { text: 'the mug contains something that is no longer coffee and may be sentient. you leave it be.', choices: [{ match: ['desk', 'back', 'cd -'], goto: 'desk' }] },
     phone: {
       text:
-        'half-buried in the clutter: an ancient FLIP PHONE. it\'s a classic Motorola RAZR. You reminisce about the golden age of technology, using T9 predictive text while driving a stick shift\n' +
-        'The phone has a STICKY NOTE with all caps letters on it: "M O T O R O L A"',
+        'half-buried in the clutter: an ancient FLIP PHONE. it\'s a classic Motorola RAZR. You reminisce about the golden age of technology, using T9 predictive text while driving a stick shift.\n' +
+        'The phone has a STICKY NOTE with all caps letters on it:\n    "M O T O R O L A"',
       choices: [
         { match: ['drawer', 'keypad', 'code', 'open drawer'], goto: 'drawerLocked' },
         { match: ['note', 'read note'], goto: 'phone' },
-        { match: ['desk', 'back'], goto: 'desk' },
+        { match: ['desk', 'back', 'cd -'], goto: 'desk' },
       ],
     },
     drawerLocked: {
@@ -271,8 +343,26 @@ DRAWER_CODE_HASH='5a428bd6ebf276771ef1e8c0a30e6026e225c1ce69433502bd4e1639707383
       gateGoto: 'drawerOpen',
       reject: "the keypad buzzes red. wrong number.",
       choices: [
-        { match: ['desk', 'back'], goto: 'desk' },
+        { match: ['desk', 'back', 'cd -'], goto: 'desk' },
         { match: ['note', 'read note', 'phone', 'flip phone'], goto: 'phone' },
+        { match: ['vent'], goto: 'vent' },
+        { match: ['door'], goto: 'door1' },
+        { match: ['terminal'], goto: 'termDead' },
+      ],
+      variants: [
+        {
+          // already opened: no more keypad, nothing left to take
+          when: (w) => w.has('wrench'),
+          gate: false,
+          text: 'the drawer hangs open. it\'s empty now.',
+          choices: [
+            { match: ['desk', 'back', 'cd -'], goto: 'desk' },
+            { match: ['phone', 'flip phone', 'note'], goto: 'phone' },
+            { match: ['vent'], goto: 'vent' },
+            { match: ['door'], goto: 'door1' },
+            { match: ['terminal'], goto: 'termDead' },
+          ],
+        },
       ],
     },
     drawerOpen: {
@@ -281,7 +371,8 @@ DRAWER_CODE_HASH='5a428bd6ebf276771ef1e8c0a30e6026e225c1ce69433502bd4e1639707383
         'click. the drawer slides open. inside: a small WRENCH and a folded PAPER. you take the wrench. (acquired: WRENCH)\n' +
         "the paper reads: 'FDHVDU — shift 3'. you pocket it too.",
       choices: [
-        { match: ['vent', 'fan', 'clear fan'], goto: 'ventReturn' },
+        { match: ['vent', 'fan', 'clear fan'], goto: 'vent' },
+        { match: ['desk', 'back', 'cd -'], goto: 'desk' },
         { match: ['door'], goto: 'door1' },
         { match: ['terminal'], goto: 'termDead' },
         { match: ['paper', 'read paper', 'fdhvdu'], goto: 'paper' },
@@ -291,42 +382,39 @@ DRAWER_CODE_HASH='5a428bd6ebf276771ef1e8c0a30e6026e225c1ce69433502bd4e1639707383
       text:
         "the paper again: 'FDHVDU — shift 3'. the letters look scrambled, like each one was pushed forward.",
       choices: [
-        { match: ['vent', 'fan'], goto: 'ventReturn' },
+        { match: ['vent', 'fan'], goto: 'vent' },
         { match: ['door'], goto: 'door1' },
         { match: ['terminal'], goto: 'termDead' },
-        { match: ['desk'], goto: 'desk' },
-      ],
-    },
-    ventReturn: {
-      text: 'back at the vent, the seized FAN is still there, bolt and all.',
-      choices: [
-        { match: ['clear', 'clear fan', 'fan', 'use wrench', 'wrench'], goto: 'fanJam' },
-        { match: ['desk'], goto: 'desk' },
-        { match: ['door'], goto: 'door1' },
-        { match: ['terminal'], goto: 'termDead' },
+        { match: ['desk', 'back', 'cd -'], goto: 'desk' },
       ],
     },
 
     // ─── Act 2: the terminal ───────────────────────────────────────────────────
     termDead: {
       text:
-        'the terminal is dark — no power. there is a slot for a BATTERY on its side.\n' +
-        'no battery, no screen.',
+        'the terminal is dark — no power. there is a slot for a BATTERY on its side.',
       requires: 'battery',
       blockedGoto: 'termNoPower',
       choices: [
-        { match: ['insert battery', 'battery', 'power', 'turn on', 'on'], goto: 'termOn' },
+        { match: ['battery', 'insert battery', 'power', 'turn on', 'on'], goto: 'termOn' },
         { match: ['desk'], goto: 'desk' },
         { match: ['door'], goto: 'door1' },
         { match: ['vent'], goto: 'vent' },
+        { match: ['back', 'cd -'], goto: 'start' },
+      ],
+      variants: [
+        // once the battery's in, "the terminal" is whatever screen it's showing
+        { when: (w) => w.seen('termUnlocked'), redirect: 'termUnlocked' },
+        { when: (w) => w.seen('termOn'), redirect: 'termOn' },
       ],
     },
     termNoPower: {
-      text: "the screen stays dead. it needs a BATTERY you don't have yet.",
+      text: "the terminal is dark — no power. there's a slot for a BATTERY on its side, but you don't have one.",
       choices: [
-        { match: ['vent', 'fan'], goto: 'ventReturn' },
+        { match: ['vent', 'fan'], goto: 'vent' },
         { match: ['desk'], goto: 'desk' },
         { match: ['door'], goto: 'door1' },
+        { match: ['back', 'cd -'], goto: 'start' },
       ],
     },
     termOn: {
@@ -339,7 +427,21 @@ DRAWER_CODE_HASH='5a428bd6ebf276771ef1e8c0a30e6026e225c1ce69433502bd4e1639707383
       answerHash: [TERM_ANSWER_HASH],
       gateGoto: 'termUnlocked',
       reject: "   > DENIED.",
-      choices: [{ match: ['door'], goto: 'door1' }],
+      choices: [
+        { match: ['door'], goto: 'door1' },
+        { match: ['desk'], goto: 'desk' },
+        { match: ['vent'], goto: 'vent' },
+        { match: ['back', 'cd -'], goto: 'start' },
+      ],
+      variants: [
+        {
+          when: (w) => w.seen('termOn'),
+          text:
+            'the terminal hums, battery in its slot.\n' +
+            '   > AUTH REQUIRED. enter decoded pass-word.\n' +
+            "   > on file: 'FDHVDU'",
+        },
+      ],
     },
     termUnlocked: {
       grants: 'code',
@@ -351,6 +453,15 @@ DRAWER_CODE_HASH='5a428bd6ebf276771ef1e8c0a30e6026e225c1ce69433502bd4e1639707383
         { match: ['door', 'keypad', 'keycard'], goto: 'doorCard' },
         { match: ['desk'], goto: 'desk' },
         { match: ['vent'], goto: 'vent' },
+        { match: ['back', 'cd -'], goto: 'start' },
+      ],
+      variants: [
+        {
+          when: (w) => w.seen('termUnlocked'),
+          text:
+            'the terminal glows. the screen still reads:\n' +
+            '   > KEYPAD SEQUENCE: "the colors are RED, GREEN, BLUE. enter them the way a traffic light tells you: GO, then STOP, then the one left over."',
+        },
       ],
     },
 
@@ -368,6 +479,8 @@ DRAWER_CODE_HASH='5a428bd6ebf276771ef1e8c0a30e6026e225c1ce69433502bd4e1639707383
       choices: [
         { match: ['terminal'], goto: 'termDead' },
         { match: ['desk'], goto: 'desk' },
+        { match: ['vent'], goto: 'vent' },
+        { match: ['back', 'cd -'], goto: 'door1' },
       ],
     },
     doorNoCard: {
@@ -376,6 +489,7 @@ DRAWER_CODE_HASH='5a428bd6ebf276771ef1e8c0a30e6026e225c1ce69433502bd4e1639707383
         { match: ['vent'], goto: 'vent' },
         { match: ['desk'], goto: 'desk' },
         { match: ['terminal'], goto: 'termDead' },
+        { match: ['back', 'cd -'], goto: 'door1' },
       ],
     },
 
@@ -386,6 +500,17 @@ DRAWER_CODE_HASH='5a428bd6ebf276771ef1e8c0a30e6026e225c1ce69433502bd4e1639707383
       choices: [
         { match: ['archive', 'left'], goto: 'archive' },
         { match: ['server', 'right', 'core'], goto: 'serverSealed' },
+        { match: ['back', 'cd', 'cell', 'door'], goto: 'door1' },
+      ],
+      variants: [
+        {
+          when: (w) => w.seen('serverRoom'),
+          text: 'the long CORRIDOR. the ARCHIVE is to the left; the SERVER door stands open to the right.',
+        },
+        {
+          when: (w) => w.seen('corridor'),
+          text: 'the long CORRIDOR. the ARCHIVE is to the left; the SERVER door is shut to the right.',
+        },
       ],
     },
     serverSealed: {
@@ -397,16 +522,23 @@ DRAWER_CODE_HASH='5a428bd6ebf276771ef1e8c0a30e6026e225c1ce69433502bd4e1639707383
       answerHash: [RIDDLE_ANSWER_HASH],
       gateGoto: 'serverRoom',
       reject: "   > the plate stays shut.",
-      choices: [{ match: ['archive', 'corridor', 'back'], goto: 'corridor' }],
+      choices: [{ match: ['corridor', 'archive', 'back', 'cd -'], goto: 'corridor' }],
+      variants: [
+        // riddle already solved: go straight to the door (which still needs power)
+        { when: (w) => w.seen('serverDark') || w.seen('serverRoom'), redirect: 'serverRoom' },
+      ],
     },
     archive: {
-      text:
-        'the ARCHIVE: shelves of dead manuals. three things stand out — leather bound NOTEBOOK, a locked SAFE with a lettered dial, and a cracked FUSE box.',
+      text: (w) =>
+        'the ARCHIVE: shelves of dead manuals. three things stand out — leather bound NOTEBOOK, ' +
+        (w.seen('safeOpen') ? 'the SAFE, its door hanging open,' : 'a locked SAFE with a lettered dial,') +
+        ' and ' +
+        (w.has('power') ? 'the FUSE box, a new fuse glowing inside.' : 'a cracked FUSE box.'),
       choices: [
         { match: ['notebook', 'book', 'clock log', 'log', 'clock'], goto: 'notebook' },
         { match: ['safe', 'open safe'], goto: 'safe' },
         { match: ['fuse', 'fuse box', 'fusebox'], goto: 'fuseBox' },
-        { match: ['server', 'corridor', 'back'], goto: 'corridor' },
+        { match: ['server', 'corridor', 'back', 'cd -'], goto: 'corridor' },
       ],
     },
     notebook: {
@@ -424,7 +556,7 @@ DRAWER_CODE_HASH='5a428bd6ebf276771ef1e8c0a30e6026e225c1ce69433502bd4e1639707383
       choices: [
         { match: ['safe'], goto: 'safe' },
         { match: ['fuse', 'fuse box'], goto: 'fuseBox' },
-        { match: ['archive', 'back'], goto: 'archive' },
+        { match: ['archive', 'back', 'cd -'], goto: 'archive' },
       ],
     },
     safe: {
@@ -439,7 +571,20 @@ DRAWER_CODE_HASH='5a428bd6ebf276771ef1e8c0a30e6026e225c1ce69433502bd4e1639707383
       reject: '   > CLUNK. wrong.',
       choices: [
         { match: ['notebook', 'book', 'clock log', 'log', 'clock'], goto: 'notebook' },
-        { match: ['archive', 'back'], goto: 'archive' },
+        { match: ['archive', 'back', 'cd -'], goto: 'archive' },
+      ],
+      variants: [
+        {
+          when: (w) => w.seen('safeOpen'),
+          gate: false,
+          text: 'the SAFE stands open and empty.',
+          choices: [
+            { match: ['notebook', 'book', 'log', 'clock'], goto: 'notebook' },
+            { match: ['fuse', 'fuse box', 'fusebox'], goto: 'fuseBox' },
+            { match: ['server'], goto: 'serverSealed' },
+            { match: ['archive', 'back', 'cd -'], goto: 'archive' },
+          ],
+        },
       ],
     },
     safeOpen: {
@@ -449,7 +594,7 @@ DRAWER_CODE_HASH='5a428bd6ebf276771ef1e8c0a30e6026e225c1ce69433502bd4e1639707383
       choices: [
         { match: ['fuse box', 'fusebox', 'fuse'], goto: 'fuseBox' },
         { match: ['server'], goto: 'serverSealed' },
-        { match: ['archive', 'back'], goto: 'archive' },
+        { match: ['archive', 'back', 'cd -'], goto: 'archive' },
       ],
     },
     fuseBox: {
@@ -460,7 +605,13 @@ DRAWER_CODE_HASH='5a428bd6ebf276771ef1e8c0a30e6026e225c1ce69433502bd4e1639707383
         'you seat the FUSE. a breaker thunks and the whole corridor brightens — the SERVER core comes alive.',
       choices: [
         { match: ['server', 'core'], goto: 'serverSealed' },
-        { match: ['archive', 'back'], goto: 'archive' },
+        { match: ['archive', 'back', 'cd -'], goto: 'archive' },
+      ],
+      variants: [
+        {
+          when: (w) => w.seen('fuseBox'),
+          text: 'the FUSE sits snug in the box, glowing. the corridor lights hum.',
+        },
       ],
     },
     fuseEmpty: {
@@ -468,7 +619,7 @@ DRAWER_CODE_HASH='5a428bd6ebf276771ef1e8c0a30e6026e225c1ce69433502bd4e1639707383
       choices: [
         { match: ['safe'], goto: 'safe' },
         { match: ['notebook', 'book', 'clock log', 'log', 'clock'], goto: 'notebook' },
-        { match: ['archive', 'back'], goto: 'archive' },
+        { match: ['archive', 'back', 'cd -'], goto: 'archive' },
       ],
     },
 
@@ -481,11 +632,28 @@ DRAWER_CODE_HASH='5a428bd6ebf276771ef1e8c0a30e6026e225c1ce69433502bd4e1639707383
       choices: [
         { match: ['console', 'disk', 'insert disk'], goto: 'console' },
         { match: ['logic', 'logic lock', 'switches', 'panel'], goto: 'logicLock' },
+        { match: ['back', 'cd', 'corridor', 'archive'], goto: 'corridor' },
+      ],
+      variants: [
+        {
+          when: (w) => w.seen('serverRoom'),
+          text: 'the SERVER room: blinking racks, cold and loud. the glowing CONSOLE in the center, the LOGIC LOCK on the wall.',
+        },
       ],
     },
     serverDark: {
-      text: "the server door is sealed and the core is unpowered. nothing inside responds.",
-      choices: [{ match: ['archive', 'corridor', 'back'], goto: 'corridor' }],
+      text: "the riddle plate clicks, but the door doesn't budge. the core behind it is dark and unpowered.",
+      choices: [
+        { match: ['archive', 'left'], goto: 'archive' },
+        { match: ['corridor', 'back', 'cd -'], goto: 'corridor' },
+        { match: ['server', 'door', 'push'], goto: 'serverSealed' },
+      ],
+      variants: [
+        {
+          when: (w) => w.seen('serverDark'),
+          text: 'the SERVER door is still shut. the core behind it is dark and unpowered.',
+        },
+      ],
     },
     console: {
       requires: 'disk',
@@ -493,15 +661,28 @@ DRAWER_CODE_HASH='5a428bd6ebf276771ef1e8c0a30e6026e225c1ce69433502bd4e1639707383
       text:
         'the console has a slot the exact size of the DISK. INSERT it? (go on. it only says DO NOT RUN.)',
       choices: [
-        { match: ['insert', 'insert disk', 'disk', 'run', 'use disk'], goto: 'diskRun' },
+        { match: ['disk', 'insert', 'insert disk', 'run', 'use disk'], goto: 'diskRun' },
         { match: ['logic', 'logic lock'], goto: 'logicLock' },
+        { match: ['back', 'cd', 'corridor'], goto: 'corridor' },
+      ],
+      variants: [
+        {
+          when: (w) => w.seen('diskRun'),
+          text:
+            'the DISK whirs away in the console.\n' +
+            '   > FINAL STEP LOCKED behind LOGIC LOCK.',
+          choices: [
+            { match: ['logic', 'logic lock', 'switches', 'panel'], goto: 'logicLock' },
+            { match: ['back', 'cd', 'corridor'], goto: 'corridor' },
+          ],
+        },
       ],
     },
     consoleNoDisk: {
       text: "the slot is empty and your pockets have no DISK to feed it.",
       choices: [
         { match: ['logic', 'logic lock'], goto: 'logicLock' },
-        { match: ['archive', 'corridor', 'back'], goto: 'corridor' },
+        { match: ['corridor', 'archive', 'back', 'cd -'], goto: 'corridor' },
       ],
     },
     diskRun: {
@@ -509,7 +690,10 @@ DRAWER_CODE_HASH='5a428bd6ebf276771ef1e8c0a30e6026e225c1ce69433502bd4e1639707383
         'the disk whirs. text scrolls:\n' +
         '   > LOADING release_sequence ...\n' +
         '   > FINAL STEP LOCKED behind LOGIC LOCK.',
-      choices: [{ match: ['logic', 'logic lock', 'switches', 'panel'], goto: 'logicLock' }],
+      choices: [
+        { match: ['logic', 'logic lock', 'switches', 'panel'], goto: 'logicLock' },
+        { match: ['back', 'cd -', 'corridor'], goto: 'corridor' },
+      ],
     },
     logicLock: {
       text:
@@ -520,7 +704,19 @@ DRAWER_CODE_HASH='5a428bd6ebf276771ef1e8c0a30e6026e225c1ce69433502bd4e1639707383
       answer: ['on off on', 'onoffon'],
       gateGoto: 'releaseGate',
       reject: "   > BUZZ.",
-      choices: [{ match: ['console', 'back'], goto: 'console' }],
+      choices: [{ match: ['console', 'back', 'cd -'], goto: 'console' }],
+      variants: [
+        {
+          // nothing to unlock until something is running on the console
+          when: (w) => !w.seen('diskRun'),
+          gate: false,
+          text: 'the LOGIC LOCK panel is dark. three switches, A, B, C, all dead. it seems to be waiting on the CONSOLE.',
+          choices: [
+            { match: ['console', 'disk'], goto: 'console' },
+            { match: ['back', 'cd', 'corridor'], goto: 'corridor' },
+          ],
+        },
+      ],
     },
     releaseGate: {
       text:
@@ -666,30 +862,52 @@ DRAWER_CODE_HASH='5a428bd6ebf276771ef1e8c0a30e6026e225c1ce69433502bd4e1639707383
   }
 
   // ── The flip ─────────────────────────────────────────────────────────────────
+  // How a node looks right now: the first matching variant's fields layered
+  // over the base node.
+  function view(id) {
+    const base = ADVENTURE[id];
+    if (!base) return null;
+    const v = (base.variants || []).find((x) => x.when(world));
+    return v ? { ...base, ...v } : base;
+  }
+
+  function textOf(n) {
+    return typeof n.text === 'function' ? n.text(world) : n.text;
+  }
+
   function enterAdventure() {
     node = 'start';
     inventory.clear();
+    visited.clear();
+    here = view('start');
+    visited.add('start');
     say('');
-    say(ADVENTURE.start.text);
+    say(textOf(here));
   }
 
   function advance(goto) {
-    let next = ADVENTURE[goto];
-    if (!next) return;
-    // gate on required items: if you lack one, redirect to the blocked node.
-    // crucially, track the RESOLVED id so `node` matches the text we show —
-    // otherwise we'd land the player on a gate node while showing the blocked
-    // text, letting them clear the gate without ever holding the item.
-    if (next.requires && !inventory.has(next.requires)) {
-      goto = next.blockedGoto;
-      next = ADVENTURE[goto];
-      if (!next) { say("that doesn't work yet."); return; }
+    // resolve where you actually end up: follow variant redirects, and gate on
+    // required items (lacking one sends you to blockedGoto). we track the
+    // RESOLVED id so `node` always matches the text we show — otherwise you
+    // could stand on a gate while reading the "blocked" text and clear the gate
+    // without ever holding the item. the hop cap guards against a bad loop.
+    let next = null;
+    for (let hops = 0; hops < 6; hops++) {
+      next = view(goto);
+      if (!next) break;
+      if (next.redirect) { goto = next.redirect; continue; }
+      if (next.requires && !inventory.has(next.requires)) { goto = next.blockedGoto; continue; }
+      break;
     }
+    if (!next || next.redirect) { say("that doesn't work yet."); return; }
+
     if (next.grants) {
       (Array.isArray(next.grants) ? next.grants : [next.grants]).forEach((g) => inventory.add(g));
     }
     node = goto;
-    say(next.text);
+    here = next; // snapshot: choices/gates come from the room as you found it
+    say(textOf(next));
+    visited.add(goto);
     if (next.win) triggerWin();
   }
 
@@ -744,6 +962,122 @@ DRAWER_CODE_HASH='5a428bd6ebf276771ef1e8c0a30e6026e225c1ce69433502bd4e1639707383
     say('That feels really underwhelming...');
   }
 
+  // ── In-game help ──────────────────────────────────────────────────────────────
+  // Lists what you can type in the current room, built from its own choices:
+  // one label per choice (its first keyword that isn't back/cd), skipping
+  // choices that just loop back to this room. It never lists answers (those
+  // live in answer/answerHash, not choices) and never checks whether a choice
+  // will succeed — filtering out the ones that fail would itself be a hint.
+  const BACK_WORDS = ['back', 'cd', 'cd -'];
+  function helpFor(n, id) {
+    const labels = [];
+    let canGoBack = false;
+    for (const c of n.choices || []) {
+      if (c.match.some((m) => BACK_WORDS.includes(m))) canGoBack = true;
+      if (c.goto === id) continue;
+      const label = c.match.find((m) => !BACK_WORDS.includes(m));
+      if (label && !labels.includes(label)) labels.push(label);
+    }
+    const out = [];
+    if (labels.length) out.push('you can try: ' + labels.join(', '));
+    if (n.gate) out.push('or try entering something here.');
+    out.push('also: ' + (canGoBack ? 'back (cd -), ' : '') + 'inventory (ls), help');
+    return out.join('\n');
+  }
+
+  // ── Fake shell (chat mode only) ───────────────────────────────────────────────
+  // A handful of bash-ish commands that work before the game starts. Exact
+  // patterns only, so normal chat ("cool", "ok") never turns into "command not
+  // found". Kept separate from the adventure engine on purpose.
+  const SCRIPTS = {
+    'adventure.sh': "#!/bin/bash\n# don't read this. just run it.",
+    'lightmode.sh':
+      '#!/bin/bash\n' +
+      '# flips the only switch on this website.\n' +
+      "document.getElementById('dark-mode-button').click()",
+  };
+
+  const SHELL_HELP =
+    'cursor shell, version 0.0.1\n' +
+    'these shell commands are defined internally:\n' +
+    '   ls       list files\n' +
+    '   cat      print a file\n' +
+    '   clear    clear the screen\n' +
+    '   pwd      where am I\n' +
+    '   whoami   who are you\n' +
+    '   exit     leave\n' +
+    '   help     this\n' +
+    '   [other]  ...?';
+
+  function runScript(name) {
+    if (name === 'adventure.sh') {
+      enterAdventure();
+    } else if (name === 'lightmode.sh') {
+      // click the real button so darkMode.js does the toggle (and saves it)
+      const btn = document.getElementById('dark-mode-button');
+      if (btn) btn.click();
+      else say('lightmode.sh: there is no light to switch.');
+    }
+  }
+
+  // Returns true if `cmd` (lowercased, single-spaced) was a shell command.
+  function runShell(cmd) {
+    // ./x.sh, sh x.sh, bash x.sh, or just x.sh
+    const run = cmd.match(/^(?:\.\/|(?:sh|bash) )?([\w.-]+\.sh)$/);
+    if (run) {
+      if (SCRIPTS[run[1]]) runScript(run[1]);
+      else say('bash: ' + run[1] + ': No such file or directory');
+      return true;
+    }
+
+    const cat = cmd.match(/^cat (\S+)$/);
+    if (cat) {
+      const file = cat[1].replace(/^\.\//, '');
+      say(SCRIPTS[file] || 'cat: ' + cat[1] + ': No such file or directory');
+      return true;
+    }
+
+    // (the hashed `sudo` backdoor is checked before this, so it still works)
+    if (/^sudo( |$)/.test(cmd)) {
+      say('visitor is not in the sudoers file. this incident will be reported.');
+      return true;
+    }
+
+    if (cmd === 'man') {
+      say("What manual page do you want?\nFor example, try 'man man'.");
+      return true;
+    }
+    if (/^man /.test(cmd)) {
+      say(cmd === 'man man' ? SHELL_HELP : 'No manual entry for ' + cmd.slice(4) + ". try 'man man'.");
+      return true;
+    }
+
+    switch (cmd) {
+      case 'ls': case 'ls -a': case 'ls -l': case 'ls -la': case 'ls -al':
+        say('adventure.sh  lightmode.sh');
+        return true;
+      case 'pwd':
+        say('/the/bottom/of/a/personal/website');
+        return true;
+      case 'whoami':
+        say('visitor');
+        return true;
+      case 'clear':
+        log.replaceChildren(); // back to just the cursor
+        return true;
+      case 'rm -rf /': case 'rm -rf /*': case 'rm -rf ~': case 'rm -rf *':
+        say('absolutely not.');
+        return true;
+      case 'exit': case 'logout':
+        say('there is no exit. there is only the cursor.');
+        return true;
+      case 'help':
+        say(SHELL_HELP);
+        return true;
+    }
+    return false;
+  }
+
   // ── Input handling ────────────────────────────────────────────────────────────
   async function submit(raw) {
     const text = raw.trim();
@@ -758,11 +1092,16 @@ DRAWER_CODE_HASH='5a428bd6ebf276771ef1e8c0a30e6026e225c1ce69433502bd4e1639707383
     // adventure mode
     if (node) {
       const lower = text.toLowerCase();
-      const n = ADVENTURE[node];
+      const n = here;
 
-      if (lower === 'inventory' || lower === 'inv' || lower === 'i') {
+      if (['inventory', 'inv', 'i', 'ls'].includes(lower)) {
         const items = [...inventory];
         say(items.length ? 'carrying: ' + items.join(', ') : 'your hands are empty.');
+        return;
+      }
+
+      if (lower === 'help' || lower === 'man') {
+        say(helpFor(n, node));
         return;
       }
 
@@ -783,6 +1122,10 @@ DRAWER_CODE_HASH='5a428bd6ebf276771ef1e8c0a30e6026e225c1ce69433502bd4e1639707383
     }
 
     // chat mode
+    // shell commands first: they don't count toward the adventure trigger, and
+    // they must win over trigger words (e.g. "cat adventure.sh" contains "adventure").
+    if (runShell(text.toLowerCase().replace(/\s+/g, ' '))) return;
+
     messageCount++;
     const lower = text.toLowerCase();
 

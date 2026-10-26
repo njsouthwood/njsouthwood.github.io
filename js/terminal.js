@@ -1,13 +1,12 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // A faux terminal that lives at the bottom of the page.
 //
-// It presents as nothing: a single blinking cursor. No label, no prompt, no
-// "chat with me!" bubble. If you start typing, it answers in flat, deadpan
+// It presents as nothing: a single blinking cursor. If you start typing, it answers in flat, deadpan
 // one-liners — the way every website's mandatory chatbot wishes it could.
 //
 // After a few exchanges (or if you type a trigger word), it quietly stops
-// being a chatbot and becomes a long text adventure. You don't get asked. It
-// just happens. There are no hints — the rooms describe only what's in them.
+// being a chatbot and becomes a text adventure. You don't get asked. It
+// just happens.
 // ─────────────────────────────────────────────────────────────────────────────
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -29,15 +28,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const TRIGGER_COUNT = 4;
   const TRIGGER_WORDS = ['adventure', 'game', 'are you real', 'help me'];
 
-  // ── Hashed gate answers ─────────────────────────────────────────────────────
-  // A few puzzle answers are stored as salted, iterated SHA-256 hashes instead
-  // of plaintext, so a developer poking at the source to cheat finds a hash,
-  // not the word. (Not real security — the answers are short and derivable from
-  // in-game clues — just a wink at anyone trying to shortcut the game.)
-  //
-  // These values MUST match scripts/hash-answers.js. To change a hashed answer,
-  // edit that script and re-run `node scripts/hash-answers.js`, then paste.
-  const hashConfig = { SALT: 'njs-terminal-v1::', ITERATIONS: 2000 };
+TERM_ANSWER_HASH='a44ac8e191f7dca24e1f7f254515f3633d78b8694576ddd9b34ab76ab3ddafe1';
+RIDDLE_ANSWER_HASH='66775c827bb9f4d4eea754062c66adf3188f8593cab6f74f4b7fc304da824cf8';
+SAFE_ANSWER_HASH='3097edfd97a15a1e89b53c8f242389669635e3e62647b3c4441a0b33bc02a175'
+DRAWER_CODE_HASH='5a428bd6ebf276771ef1e8c0a30e6026e225c1ce69433502bd4e1639707383b8';
 
   function normalizeAnswer(s) {
     return s.toLowerCase().replace(/\s+/g, '');
@@ -48,6 +42,12 @@ document.addEventListener('DOMContentLoaded', () => {
       .map((b) => b.toString(16).padStart(2, '0'))
       .join('');
   }
+
+  // ── Hashed gate answers ─────────────────────────────────────────────────────
+  // A few puzzle answers are stored as salted, iterated SHA-256 hashes instead
+  // of plaintext, making it impossible for hackers to bypass. 
+  // (searching git history is cheating).
+  const hashConfig = { SALT: 'njs-terminal-v1::', ITERATIONS: 2000 };
 
   // SHA-256 applied ITERATIONS times over (salt + normalized answer). Round 1
   // hashes the UTF-8 bytes of the salted string; each later round hashes the
@@ -239,26 +239,40 @@ document.addEventListener('DOMContentLoaded', () => {
     },
     desk: {
       text:
-        'a cluttered desk: a dead PLANT, a cold MUG growing mold, a locked DRAWER (one digit), and a sticky NOTE.\n' +
-        "the NOTE reads: 'drawer code = number of letters in MONO'.",
+        'a cluttered desk: a dead PLANT, a cold MUG growing mold, a locked DRAWER with a numeric KEYPAD, and an old Motorola flip PHONE with a sticky NOTE.',
       choices: [
-        { match: ['note', 'read note'], goto: 'desk' },
+        { match: ['note', 'read note'], goto: 'phone' },
         { match: ['plant'], goto: 'plant' },
         { match: ['mug', 'coffee', 'cup'], goto: 'mug' },
-        { match: ['drawer', 'open drawer'], goto: 'drawerLocked' },
-        { match: ['4', 'four', 'open drawer 4', 'enter 4', 'code 4'], goto: 'drawerOpen' },
+        { match: ['phone', 'flip phone', 'cell', 'cellphone', 'cell phone'], goto: 'phone' },
+        { match: ['drawer', 'open drawer', 'keypad', 'code'], goto: 'drawerLocked' },
         { match: ['door'], goto: 'door1' },
         { match: ['vent'], goto: 'vent' },
         { match: ['terminal'], goto: 'termDead' },
       ],
     },
-    plant: { text: 'the plant is extremely dead. a small card in the soil reads "water me (joke)".', choices: [{ match: ['desk', 'back'], goto: 'desk' }] },
+    plant: { text: 'the plant is extremely dead. a small card in the soil reads "water me".', choices: [{ match: ['desk', 'back'], goto: 'desk' }] },
     mug: { text: 'the mug contains something that is no longer coffee and may be sentient. you leave it be.', choices: [{ match: ['desk', 'back'], goto: 'desk' }] },
-    drawerLocked: {
-      text: "locked with a single digit. you'll need the code.",
+    phone: {
+      text:
+        'half-buried in the clutter: an ancient FLIP PHONE. it\'s a classic Motorola RAZR. You reminisce about the golden age of technology, using T9 predictive text while driving a stick shift\n' +
+        'The phone has a STICKY NOTE with all caps letters on it: "M O T O R O L A"',
       choices: [
-        { match: ['note', 'read note'], goto: 'desk' },
-        { match: ['4', 'four'], goto: 'drawerOpen' },
+        { match: ['drawer', 'keypad', 'code', 'open drawer'], goto: 'drawerLocked' },
+        { match: ['note', 'read note'], goto: 'phone' },
+        { match: ['desk', 'back'], goto: 'desk' },
+      ],
+    },
+    drawerLocked: {
+      text:
+        "the drawer is locked with a 9 digit DRAWER keypad and a little blinking yellow light.",
+      gate: true,
+      answerHash: [DRAWER_CODE_HASH],
+      gateGoto: 'drawerOpen',
+      reject: "the keypad buzzes red. wrong number.",
+      choices: [
+        { match: ['desk', 'back'], goto: 'desk' },
+        { match: ['note', 'read note', 'phone', 'flip phone'], goto: 'phone' },
       ],
     },
     drawerOpen: {
@@ -322,7 +336,7 @@ document.addEventListener('DOMContentLoaded', () => {
         "   > on file: 'FDHVDU'\n\n" +
         'it wants the decoded word.',
       gate: true,
-      answerHash: ["a44ac8e191f7dca24e1f7f254515f3633d78b8694576ddd9b34ab76ab3ddafe1"],
+      answerHash: [TERM_ANSWER_HASH],
       gateGoto: 'termUnlocked',
       reject: "   > DENIED.",
       choices: [{ match: ['door'], goto: 'door1' }],
@@ -380,26 +394,33 @@ document.addEventListener('DOMContentLoaded', () => {
         '   "I am taken from a mine and shut in a wooden case, from which I am never released, and yet I am used by almost everybody. what am I?"\n' +
         'it wants a one-word ANSWER.',
       gate: true,
-      answerHash: ["66775c827bb9f4d4eea754062c66adf3188f8593cab6f74f4b7fc304da824cf8","db0a4ede901d619d3a026b6c1b47f7605e57304b39382278c48f827756307105","1b87e99b99203fe3d6259f3ecaea42bfeeabb258c465b6220b51691235fe2435","c46387628744fbe27ebcf6a35ef8a673f6a07bebf58e2e7df0de08148d8a9188"],
+      answerHash: [RIDDLE_ANSWER_HASH],
       gateGoto: 'serverRoom',
       reject: "   > the plate stays shut.",
       choices: [{ match: ['archive', 'corridor', 'back'], goto: 'corridor' }],
     },
     archive: {
       text:
-        'the ARCHIVE: shelves of dead manuals. three things stand out — a RIDDLE BOOK, a locked SAFE (4-digit), and a cracked FUSE box.',
+        'the ARCHIVE: shelves of dead manuals. three things stand out — leather bound NOTEBOOK, a locked SAFE with a lettered dial, and a cracked FUSE box.',
       choices: [
-        { match: ['book', 'riddle book', 'riddle', 'read book'], goto: 'riddleBook' },
+        { match: ['notebook', 'book', 'clock log', 'log', 'clock'], goto: 'notebook' },
         { match: ['safe', 'open safe'], goto: 'safe' },
         { match: ['fuse', 'fuse box', 'fusebox'], goto: 'fuseBox' },
         { match: ['server', 'corridor', 'back'], goto: 'corridor' },
       ],
     },
-    riddleBook: {
+    notebook: {
+      // The CLOCK LOG: the clue for the SAFE. It lists a series of analog clock
+      // times. On an analog face, the three hands (hour, minute, second) of
+      // each time trace the shape of a single LETTER. Read the letters in order
+      // to spell the SAFE word.
       text:
-        'the riddle book is dog-eared on one page:\n' +
-        '   "taken from a mine, shut in wood, never released, used by all — a PENCIL."\n' +
-        '   a note in the margin: "SAFE CODE = the number of letters in PENCIL, written four times."',
+        'a leather bound NOTEBOOK, open to a page of handwritten timestamps\n\n' +
+        '   11:55:05\n' +
+        '   6:27:32\n' +
+        '   12:00:00\n' +
+        '   9:15:30\n\n' +
+        'in the margins of the page is a faint image of an analog clock face drawn in pencil... the hands of the clock have been erased',
       choices: [
         { match: ['safe'], goto: 'safe' },
         { match: ['fuse', 'fuse box'], goto: 'fuseBox' },
@@ -407,13 +428,17 @@ document.addEventListener('DOMContentLoaded', () => {
       ],
     },
     safe: {
-      text: 'the SAFE wants a 4-digit code.',
+      // The SAFE now takes a WORD spelled out by the clock-hand letters in the
+      // CLOCK LOG (notebook).
+      text:
+        'a SAFE with ornate writing says "What can you do with all the time in the world?"\n' +
+        'The lock has 4 dials with letters on them...',
       gate: true,
-      answerHash: ["2bf31bf6912f0e1a48192b1cb93a72f3649b1c3adb810dee786378c7627729ef"],
+      answerHash: [SAFE_ANSWER_HASH],
       gateGoto: 'safeOpen',
       reject: '   > CLUNK. wrong.',
       choices: [
-        { match: ['book', 'riddle book'], goto: 'riddleBook' },
+        { match: ['notebook', 'book', 'clock log', 'log', 'clock'], goto: 'notebook' },
         { match: ['archive', 'back'], goto: 'archive' },
       ],
     },
@@ -442,7 +467,7 @@ document.addEventListener('DOMContentLoaded', () => {
       text: "the fuse box is cracked and empty. there's a socket, but no FUSE to seat in it.",
       choices: [
         { match: ['safe'], goto: 'safe' },
-        { match: ['book'], goto: 'riddleBook' },
+        { match: ['notebook', 'book', 'clock log', 'log', 'clock'], goto: 'notebook' },
         { match: ['archive', 'back'], goto: 'archive' },
       ],
     },
@@ -517,7 +542,7 @@ document.addEventListener('DOMContentLoaded', () => {
     },
     warning: {
       text:
-        '   > WARNING: RELEASE grants the program full control of: the lights, the dark mode, this entire page.\n' +
+        '   > WARNING: RELEASE grants the program the entire page.\n' +
         "   > type GRANT to confirm.\n" +
         "don't read that part, it's boilerplate. 🙂",
       choices: [

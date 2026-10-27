@@ -140,13 +140,14 @@ PHONE_CODE_HASH='5a428bd6ebf276771ef1e8c0a30e6026e225c1ce69433502bd4e1639707383b
     'sure.',
     'if you say so.',
     'mm.',
-    "that's a sentence, yes.",
+    'yeah i get that a lot.',
     'and yet here we both are.',
-    'I have logged your input. nothing will come of it.',
+    'I have logged your input.',
     '...',
     'cool.',
     'incredible. anyway.',
-    'I will think about that. I will not.',
+    'I will think about that.',
+    'damn, that\'s crazy.',
   ];
   const QUESTION_REPLIES = [
     "I don't know. I'm a blinking cursor.",
@@ -229,7 +230,7 @@ PHONE_CODE_HASH='5a428bd6ebf276771ef1e8c0a30e6026e225c1ce69433502bd4e1639707383b
     // ─── Act 1: the cell ──────────────────────────────────────────────────────
     start: {
       text:
-        "i wasn't really expecting you to type anything.\n" +
+        "i wasn't really expecting you to type anything (no one ever does).\n" +
         "but here we are. I'm stuck. a little program sealed in a maintenance CELL at the bottom of a personal website. forgotten. humming.\n\n" +
         "I can feel things nearby: a DOOR, a DESK, a VENT in the wall, and a dead TERMINAL on a stand.",
       choices: [
@@ -338,7 +339,7 @@ PHONE_CODE_HASH='5a428bd6ebf276771ef1e8c0a30e6026e225c1ce69433502bd4e1639707383b
       ],
     },
     fanBlocked: {
-      text: "you shove at the fan. it doesn't budge. the bolt holding it is rusted tight — you'd need a tool to turn it.",
+      text: "you shove at the fan. it doesn't budge. the bolt holding it is rusted tight. you'd need a tool to turn it.",
       choices: [
         { match: ['vent', 'back', 'cd -'], goto: 'vent' },
         { match: ['desk'], goto: 'desk' },
@@ -394,8 +395,8 @@ PHONE_CODE_HASH='5a428bd6ebf276771ef1e8c0a30e6026e225c1ce69433502bd4e1639707383b
     mug: { text: 'the mug contains something that is no longer coffee and may be sentient. you leave it be.', choices: [{ match: ['desk', 'back', 'cd -'], goto: 'desk' }] },
     phone: {
       text:
-        'half-buried in the clutter: an ancient FLIP PHONE. it\'s a classic Motorola RAZR. You reminisce about the golden age of technology, using T9 predictive text while driving a stick shift.\n' +
-        'The phone has a STICKY NOTE with all caps letters on it:\n    "M O T O R O L A"\n' +
+        'half-buried in the clutter: an ancient FLIP PHONE. it\'s a classic Motorola RAZR. You reminisce about the golden age of technology: using T9 predictive text while driving a manual transmission.\n' +
+        'The phone has a STICKY NOTE with all caps letters on it:\n    "pw: M O T O R O L A"\n' +
         'the little screen glows: ENTER PASSCODE.',
       gate: true,
       answerHash: [PHONE_CODE_HASH],

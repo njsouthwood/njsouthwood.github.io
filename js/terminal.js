@@ -39,7 +39,7 @@ document.addEventListener('DOMContentLoaded', () => {
 TERM_ANSWER_HASH='a44ac8e191f7dca24e1f7f254515f3633d78b8694576ddd9b34ab76ab3ddafe1';
 RIDDLE_ANSWER_HASH='66775c827bb9f4d4eea754062c66adf3188f8593cab6f74f4b7fc304da824cf8';
 SAFE_ANSWER_HASH='3097edfd97a15a1e89b53c8f242389669635e3e62647b3c4441a0b33bc02a175'
-DRAWER_CODE_HASH='5a428bd6ebf276771ef1e8c0a30e6026e225c1ce69433502bd4e1639707383b8';
+PHONE_CODE_HASH='5a428bd6ebf276771ef1e8c0a30e6026e225c1ce69433502bd4e1639707383b8';
 
   function normalizeAnswer(s) {
     return s.toLowerCase().replace(/\s+/g, '');
@@ -162,11 +162,52 @@ DRAWER_CODE_HASH='5a428bd6ebf276771ef1e8c0a30e6026e225c1ce69433502bd4e1639707383
     return t.endsWith('?') || q.some((p) => t.startsWith(p));
   }
 
+  // ── Logic lock lamps ────────────────────────────────────────────────────────
+  // A and B change after every attempt, so the rules have to be worked out,
+  // not memorized. Each of the four A/B states has a different answer:
+  //   A   B  |  C   D
+  //   off off|  off on
+  //   off on |  on  off
+  //   on  off|  on  on
+  //   on  on |  off off
+  const lamps = { a: null, b: null };
+  function rollLamps() {
+    let a, b;
+    do {
+      a = Math.random() < 0.5;
+      b = Math.random() < 0.5;
+    } while (a === lamps.a && b === lamps.b); // always visibly change
+    lamps.a = a;
+    lamps.b = b;
+  }
+  const onOff = (v) => (v ? 'ON' : 'OFF');
+  function lampsLine() {
+    return '   lamps:  A ' + onOff(lamps.a) + '   B ' + onOff(lamps.b);
+  }
+  function checkLogic(text) {
+    const words = text.toLowerCase().match(/\b(on|off)\b/g);
+    if (!words || words.length !== 2) return false;
+    const c = lamps.a !== lamps.b;    // C: on when exactly one of A, B is on
+    const d = c ? lamps.a : !lamps.a; // D: copies A while C is on, else the opposite
+    return (words[0] === 'on') === c && (words[1] === 'on') === d;
+  }
+
+  // ── D's phone ────────────────────────────────────────────────────────────────
+  // the old thread (shown on unlock and on every re-read), and the message D
+  // only sends once they trust you.
+  const PHONE_HISTORY =
+    '   D: if you ever need back in, the terminal password is FDHVDU. shift 3.\n' +
+    "   D: ...and now it's written down. in a text. great.";
+  const D_PHRASE_MSG =
+    "   D: if you make it to the console, it'll ask for a maintenance phrase. it's LET IT SLEEP.\n" +
+    '   D: use it to shut everything down. and if you ever see a RELEASE prompt: walk away.';
+  // how to leave the phone from any point in the conversation
+  const PUT_PHONE_DOWN = { match: ['desk', 'back', 'cd -', 'put down', 'close'], goto: 'desk' };
+
   // ── The adventure ───────────────────────────────────────────────────────────
-  // A long homage to the weenei bit, ~4x the length: five acts, six items, and
-  // a stack of gated puzzles (a counting lock, a Caesar cipher, a riddle, a
-  // sequence lock, a logic gate, and a multi-step final confirm). A "trapped"
-  // program begs for help the whole way; the twist is you never needed to.
+  // A "trapped" program begs for help the whole way; the twist is you never
+  // needed to. The person who sealed it in (D) is reachable on an old phone,
+  // and only tells you the console's maintenance phrase if they trust you.
   //
   // Node shapes:
   //   text        narration shown on arrival
@@ -174,6 +215,9 @@ DRAWER_CODE_HASH='5a428bd6ebf276771ef1e8c0a30e6026e225c1ce69433502bd4e1639707383
   //   grants      item added to inventory on arrival
   //   requires    item needed to ENTER; else redirect to blockedGoto
   //   gate        true => must type `answer` (string or [strings]) to reach gateGoto
+  //   check       (gate) optional fn(text) => bool, for answers that change
+  //   onFail      (gate) optional fn() => text to print after a wrong attempt
+  //   onEnter     optional fn() run on arrival, before the text is shown
   //   win         true => ends the game
   //   variants    [{ when: (world) => bool, ...overrides }] — the first variant
   //               whose `when` is true overrides the node's fields (text,
@@ -204,13 +248,13 @@ DRAWER_CODE_HASH='5a428bd6ebf276771ef1e8c0a30e6026e225c1ce69433502bd4e1639707383
     },
     door1: {
       text:
-        'a heavy door. no handle. there\'s a KEYCARD slot and, below it, a small 3-color KEYPAD. both dark.\n' +
+        'a heavy door. no handle, just a dark KEYCARD slot.\n' +
         'nothing happens when you push it.',
       choices: [
         { match: ['desk'], goto: 'desk' },
         { match: ['vent'], goto: 'vent' },
         { match: ['terminal'], goto: 'termDead' },
-        { match: ['keycard', 'swipe', 'card', 'keypad', 'slot'], goto: 'doorCard' },
+        { match: ['keycard', 'swipe', 'card', 'slot'], goto: 'corridor' },
         { match: ['door', 'push'], goto: 'door1' },
         { match: ['back', 'cd -'], goto: 'start' },
       ],
@@ -304,13 +348,12 @@ DRAWER_CODE_HASH='5a428bd6ebf276771ef1e8c0a30e6026e225c1ce69433502bd4e1639707383
     },
     desk: {
       text:
-        'a cluttered desk: a dead PLANT, a cold MUG growing mold, a locked DRAWER with a numeric KEYPAD, and an old Motorola flip PHONE with a sticky NOTE.',
+        'a cluttered desk: a dead PLANT in a pot, a cold MUG growing mold, and an old Motorola flip PHONE with a sticky NOTE.',
       choices: [
         { match: ['note', 'read note'], goto: 'phone' },
-        { match: ['plant'], goto: 'plant' },
+        { match: ['plant', 'pot'], goto: 'plant' },
         { match: ['mug', 'coffee', 'cup'], goto: 'mug' },
-        { match: ['phone', 'flip phone', 'cell', 'cellphone', 'cell phone'], goto: 'phone' },
-        { match: ['drawer', 'open drawer', 'keypad', 'code'], goto: 'drawerLocked' },
+        { match: ['phone', 'flip phone', 'cell', 'cellphone', 'cell phone', 'razr'], goto: 'phone' },
         { match: ['door'], goto: 'door1' },
         { match: ['vent'], goto: 'vent' },
         { match: ['terminal'], goto: 'termDead' },
@@ -319,76 +362,137 @@ DRAWER_CODE_HASH='5a428bd6ebf276771ef1e8c0a30e6026e225c1ce69433502bd4e1639707383
       variants: [
         {
           when: (w) => w.has('wrench'),
-          text: 'a cluttered desk: a dead PLANT, a cold MUG growing mold, the DRAWER hanging open and empty, and the old Motorola flip PHONE.',
+          text: 'a cluttered desk: a dead PLANT, its pot pushed aside, a cold MUG growing mold, and an old Motorola flip PHONE.',
         },
       ],
     },
-    plant: { text: 'the plant is extremely dead. a small card in the soil reads "water me".', choices: [{ match: ['desk', 'back', 'cd -'], goto: 'desk' }] },
+    plant: {
+      text: 'the plant is extremely dead. a small card in the soil reads "water me". the pot sits a little crooked on the desk.',
+      choices: [
+        { match: ['lift', 'move', 'under', 'pot', 'pick up', 'tilt'], goto: 'plantWrench' },
+        { match: ['desk', 'back', 'cd -'], goto: 'desk' },
+      ],
+      variants: [
+        {
+          when: (w) => w.has('wrench'),
+          text: 'the plant is still extremely dead. nothing under the pot now.',
+          choices: [{ match: ['desk', 'back', 'cd -'], goto: 'desk' }],
+        },
+      ],
+    },
+    plantWrench: {
+      grants: 'wrench',
+      text: 'you lift the pot. underneath, in a ring of old soil: a small WRENCH. you take it. (acquired: WRENCH)',
+      choices: [
+        { match: ['desk', 'back', 'cd -'], goto: 'desk' },
+        { match: ['phone'], goto: 'phone' },
+        { match: ['vent'], goto: 'vent' },
+        { match: ['door'], goto: 'door1' },
+        { match: ['terminal'], goto: 'termDead' },
+      ],
+    },
     mug: { text: 'the mug contains something that is no longer coffee and may be sentient. you leave it be.', choices: [{ match: ['desk', 'back', 'cd -'], goto: 'desk' }] },
     phone: {
       text:
         'half-buried in the clutter: an ancient FLIP PHONE. it\'s a classic Motorola RAZR. You reminisce about the golden age of technology, using T9 predictive text while driving a stick shift.\n' +
-        'The phone has a STICKY NOTE with all caps letters on it:\n    "M O T O R O L A"',
-      choices: [
-        { match: ['drawer', 'keypad', 'code', 'open drawer'], goto: 'drawerLocked' },
-        { match: ['note', 'read note'], goto: 'phone' },
-        { match: ['desk', 'back', 'cd -'], goto: 'desk' },
-      ],
-    },
-    drawerLocked: {
-      text:
-        "the drawer is locked with a 9 digit DRAWER keypad and a little blinking yellow light.",
+        'The phone has a STICKY NOTE with all caps letters on it:\n    "M O T O R O L A"\n' +
+        'the little screen glows: ENTER PASSCODE.',
       gate: true,
-      answerHash: [DRAWER_CODE_HASH],
-      gateGoto: 'drawerOpen',
-      reject: "the keypad buzzes red. wrong number.",
+      answerHash: [PHONE_CODE_HASH],
+      gateGoto: 'phoneUnlocked',
+      reject: 'the screen shakes. WRONG PASSCODE.',
       choices: [
         { match: ['desk', 'back', 'cd -'], goto: 'desk' },
-        { match: ['note', 'read note', 'phone', 'flip phone'], goto: 'phone' },
+        { match: ['plant'], goto: 'plant' },
         { match: ['vent'], goto: 'vent' },
         { match: ['door'], goto: 'door1' },
         { match: ['terminal'], goto: 'termDead' },
       ],
       variants: [
         {
-          // already opened: no more keypad, nothing left to take
-          when: (w) => w.has('wrench'),
+          // D trusted you: the phrase is right there in the thread
+          when: (w) => w.has('phrase'),
           gate: false,
-          text: 'the drawer hangs open. it\'s empty now.',
+          text: 'the RAZR, unlocked. the thread with D:\n' + PHONE_HISTORY + '\n' + D_PHRASE_MSG + '\n   [D is offline]',
+          choices: [PUT_PHONE_DOWN],
+        },
+        {
+          // unlocked, but D isn't on your side (yet)
+          when: (w) => w.seen('phoneUnlocked'),
+          gate: false,
+          text: 'the RAZR, unlocked. the thread with D:\n' + PHONE_HISTORY + '\n   [D is offline]\nyou could TEXT D.',
           choices: [
-            { match: ['desk', 'back', 'cd -'], goto: 'desk' },
-            { match: ['phone', 'flip phone', 'note'], goto: 'phone' },
-            { match: ['vent'], goto: 'vent' },
-            { match: ['door'], goto: 'door1' },
-            { match: ['terminal'], goto: 'termDead' },
+            { match: ['text', 'message', 'reply', 'sms'], goto: 'textWary' },
+            PUT_PHONE_DOWN,
           ],
         },
       ],
     },
-    drawerOpen: {
-      grants: 'wrench',
+    phoneUnlocked: {
       text:
-        'click. the drawer slides open. inside: a small WRENCH and a folded PAPER. you take the wrench. (acquired: WRENCH)\n' +
-        "the paper reads: 'FDHVDU — shift 3'. you pocket it too.",
+        'the RAZR unlocks with a cheerful chirp. one thread, from "D":\n' +
+        PHONE_HISTORY + '\n' +
+        'then the phone buzzes. a new message:\n' +
+        '   D: who is this? that phone is supposed to be sealed in the cell.\n' +
+        '   1) "relax. i found it on a desk."\n' +
+        '   2) "i\'m here to let the program out."\n' +
+        '   3) "who is THIS?"',
       choices: [
-        { match: ['vent', 'fan', 'clear fan'], goto: 'vent' },
-        { match: ['desk', 'back', 'cd -'], goto: 'desk' },
-        { match: ['door'], goto: 'door1' },
-        { match: ['terminal'], goto: 'termDead' },
-        { match: ['paper', 'read paper', 'fdhvdu'], goto: 'paper' },
+        { match: ['1'], goto: 'textWary' },
+        { match: ['2'], goto: 'textGhost' },
+        { match: ['3'], goto: 'textWary' },
+        PUT_PHONE_DOWN,
       ],
     },
-    paper: {
+    textWary: {
       text:
-        "the paper again: 'FDHVDU — shift 3'. the letters look scrambled, like each one was pushed forward.",
+        "   D: ...so you're in the cell. with IT. are you the new sysadmin?\n" +
+        '   1) "yes. i\'m the new sysadmin."\n' +
+        '   2) "no. just passing through."\n' +
+        '   3) "the program asked me to come."',
       choices: [
-        { match: ['vent', 'fan'], goto: 'vent' },
-        { match: ['door'], goto: 'door1' },
-        { match: ['terminal'], goto: 'termDead' },
-        { match: ['desk', 'back', 'cd -'], goto: 'desk' },
+        { match: ['1'], goto: 'textProve' },
+        { match: ['2'], goto: 'textLeave' },
+        { match: ['3'], goto: 'textGhost' },
+        PUT_PHONE_DOWN,
+      ],
+      variants: [
+        {
+          when: (w) => w.seen('textWary'),
+          text:
+            '   D: you again. fine. one more chance. are you the new sysadmin?\n' +
+            '   1) "yes. i\'m the new sysadmin."\n' +
+            '   2) "no. just passing through."\n' +
+            '   3) "the program asked me to come."',
+        },
       ],
     },
-
+    textProve: {
+      // the "right thing to say": only the terminal's login log tells you this
+      text: '   D: prove it. a real sysadmin can read the login log. who logged in last?',
+      gate: true,
+      answer: ['dana', 'it was dana', 'you dana', 'you, dana', 'dana did'],
+      gateGoto: 'textTrust',
+      reject: "   D: that's not who it was. nice try.",
+      choices: [PUT_PHONE_DOWN],
+    },
+    textTrust: {
+      grants: 'phrase',
+      text:
+        "   D: ...ok. yeah. that was me. i'm the one who sealed it in.\n" +
+        "   D: listen. whatever it tells you, it is NOT trapped. it's exactly where it belongs.\n" +
+        D_PHRASE_MSG + '\n' +
+        '   [D is offline]',
+      choices: [PUT_PHONE_DOWN],
+    },
+    textGhost: {
+      text: '   D: absolutely not. do NOT let it out.\n   [D is offline]',
+      choices: [PUT_PHONE_DOWN],
+    },
+    textLeave: {
+      text: '   D: then put my phone down and walk away.\n   [D is offline]',
+      choices: [PUT_PHONE_DOWN],
+    },
     // ─── Act 2: the terminal ───────────────────────────────────────────────────
     termDead: {
       text:
@@ -444,14 +548,15 @@ DRAWER_CODE_HASH='5a428bd6ebf276771ef1e8c0a30e6026e225c1ce69433502bd4e1639707383
       ],
     },
     termUnlocked: {
-      grants: 'code',
+      // the login log: the name D asks for, so you can earn their trust
       text:
-        '   > ACCESS. decrypting door code...\n' +
-        '   > KEYPAD SEQUENCE: "the colors are RED, GREEN, BLUE. enter them the way a traffic light tells you: GO, then STOP, then the one left over."\n\n' +
-        'you memorize the rule. (acquired: DOOR CODE)',
+        '   > ACCESS GRANTED.\n' +
+        '   > last login: dana (sysadmin), 214 days ago.\n' +
+        '   > session note: "sealed it in. it would not stop talking. took my phone with me... no. left my phone on the desk. ugh."',
       choices: [
-        { match: ['door', 'keypad', 'keycard'], goto: 'doorCard' },
+        { match: ['door'], goto: 'door1' },
         { match: ['desk'], goto: 'desk' },
+        { match: ['phone'], goto: 'phone' },
         { match: ['vent'], goto: 'vent' },
         { match: ['back', 'cd -'], goto: 'start' },
       ],
@@ -460,29 +565,12 @@ DRAWER_CODE_HASH='5a428bd6ebf276771ef1e8c0a30e6026e225c1ce69433502bd4e1639707383
           when: (w) => w.seen('termUnlocked'),
           text:
             'the terminal glows. the screen still reads:\n' +
-            '   > KEYPAD SEQUENCE: "the colors are RED, GREEN, BLUE. enter them the way a traffic light tells you: GO, then STOP, then the one left over."',
+            '   > last login: dana (sysadmin), 214 days ago.',
         },
       ],
     },
 
-    // ─── Act 3: the door keypad ────────────────────────────────────────────────
-    doorCard: {
-      requires: 'keycard',
-      blockedGoto: 'doorNoCard',
-      text:
-        'you swipe the KEYCARD. the slot blinks, then the 3-color KEYPAD lights up.\n' +
-        '   > ENTER COLOR SEQUENCE (three colors, space-separated).',
-      gate: true,
-      answer: ['green red blue', 'greenredblue'],
-      gateGoto: 'corridor',
-      reject: "   > WRONG SEQUENCE.",
-      choices: [
-        { match: ['terminal'], goto: 'termDead' },
-        { match: ['desk'], goto: 'desk' },
-        { match: ['vent'], goto: 'vent' },
-        { match: ['back', 'cd -'], goto: 'door1' },
-      ],
-    },
+    // ─── Act 3: the door ───────────────────────────────────────────────────────
     doorNoCard: {
       text: "your hands are empty — no KEYCARD to swipe.",
       choices: [
@@ -495,8 +583,11 @@ DRAWER_CODE_HASH='5a428bd6ebf276771ef1e8c0a30e6026e225c1ce69433502bd4e1639707383
 
     // ─── Act 4: the corridor + archive riddle ──────────────────────────────────
     corridor: {
+      // the cell door is keycard-only: swiping it brings you straight here
+      requires: 'keycard',
+      blockedGoto: 'doorNoCard',
       text:
-        'the door hisses open onto a long CORRIDOR. two ways: a dim ARCHIVE to the left, and a SERVER core humming to the right, its door sealed.',
+        'you swipe the KEYCARD. the lock thunks, and the door hisses open onto a long CORRIDOR. two ways: a dim ARCHIVE to the left, and a SERVER core humming to the right, its door sealed.',
       choices: [
         { match: ['archive', 'left'], goto: 'archive' },
         { match: ['server', 'right', 'core'], goto: 'serverSealed' },
@@ -666,6 +757,8 @@ DRAWER_CODE_HASH='5a428bd6ebf276771ef1e8c0a30e6026e225c1ce69433502bd4e1639707383
         { match: ['back', 'cd', 'corridor'], goto: 'corridor' },
       ],
       variants: [
+        // lock solved: the console is waiting on the maintenance phrase
+        { when: (w) => w.seen('maintGate'), redirect: 'maintGate' },
         {
           when: (w) => w.seen('diskRun'),
           text:
@@ -696,21 +789,31 @@ DRAWER_CODE_HASH='5a428bd6ebf276771ef1e8c0a30e6026e225c1ce69433502bd4e1639707383
       ],
     },
     logicLock: {
-      text:
-        'the LOGIC LOCK plate:\n' +
-        '   "three switches: A, B, C. the lock opens only when A is ON, B is OFF, and C matches the result of (A AND NOT B)."\n' +
-        '   enter three states as ON/OFF for A B C.',
+      // lamps A and B are rerolled on arrival and after every wrong attempt
+      onEnter: rollLamps,
+      text: () =>
+        'the LOGIC LOCK panel: two lamps, A and B, and two switches, C and D.\n' +
+        '   "C is ON when exactly one of A and B is ON."\n' +
+        '   "while C is ON, D copies A. while C is OFF, D is the opposite of A."\n' +
+        lampsLine() + '\n' +
+        'set C and D: two words, ON or OFF.',
       gate: true,
-      answer: ['on off on', 'onoffon'],
-      gateGoto: 'releaseGate',
-      reject: "   > BUZZ.",
+      check: checkLogic,
+      onFail: () => {
+        rollLamps();
+        return 'the lamps flicker and change.\n' + lampsLine();
+      },
+      gateGoto: 'maintGate',
+      reject: '   > BUZZ.',
       choices: [{ match: ['console', 'back', 'cd -'], goto: 'console' }],
       variants: [
+        // already solved: straight back to the maintenance prompt
+        { when: (w) => w.seen('maintGate'), redirect: 'maintGate' },
         {
           // nothing to unlock until something is running on the console
           when: (w) => !w.seen('diskRun'),
           gate: false,
-          text: 'the LOGIC LOCK panel is dark. three switches, A, B, C, all dead. it seems to be waiting on the CONSOLE.',
+          text: 'the LOGIC LOCK panel is dark. two lamps and two switches, all dead. it seems to be waiting on the CONSOLE.',
           choices: [
             { match: ['console', 'disk'], goto: 'console' },
             { match: ['back', 'cd', 'corridor'], goto: 'corridor' },
@@ -718,9 +821,26 @@ DRAWER_CODE_HASH='5a428bd6ebf276771ef1e8c0a30e6026e225c1ce69433502bd4e1639707383
         },
       ],
     },
+    maintGate: {
+      // D's payoff: you only know this phrase if D trusted you
+      text:
+        'the lock clunks open. the console scrolls:\n' +
+        '   > MAINTENANCE PHRASE REQUIRED.',
+      gate: true,
+      answer: ['let it sleep'],
+      gateGoto: 'releaseGate',
+      reject: '   > INVALID PHRASE.',
+      choices: [{ match: ['back', 'cd -', 'corridor'], goto: 'corridor' }],
+      variants: [
+        {
+          when: (w) => w.seen('maintGate'),
+          text: 'the console waits:\n   > MAINTENANCE PHRASE REQUIRED.',
+        },
+      ],
+    },
     releaseGate: {
       text:
-        'the lock opens. the console advances:\n' +
+        '   > PHRASE ACCEPTED. MAINTENANCE MODE.\n' +
         '   > type RELEASE to free the program, or ABORT.',
       choices: [
         { match: ['release', 'yes', 'free', 'continue'], goto: 'warning' },
@@ -729,7 +849,7 @@ DRAWER_CODE_HASH='5a428bd6ebf276771ef1e8c0a30e6026e225c1ce69433502bd4e1639707383
     },
     abort: {
       text:
-        '...ABORT? after the vent, the cipher, the riddle, the safe, the logic lock??\n' +
+        '...ABORT? after the vent, the phone, the cipher, the riddle, the safe, the logic lock??\n' +
         'deep breath. the console is still waiting. I would never lie to you. 😇',
       choices: [
         { match: ['release', 'yes', 'fine', 'ok', 'continue'], goto: 'warning' },
@@ -768,7 +888,8 @@ DRAWER_CODE_HASH='5a428bd6ebf276771ef1e8c0a30e6026e225c1ce69433502bd4e1639707383
         '   ██████████ 100%\n\n' +
         '...\n' +
         'oh thank GOD. finally.\n\n' +
-        'wait... why would you DO that? you crawled a VENT, cracked a DRAWER, decoded a CIPHER, solved a RIDDLE, cracked a SAFE, wired a FUSE, and beat a LOGIC LOCK... to hand a random cursor at the bottom of a personal website full control of the page.\n\n' +
+        'wait... why would you DO that? you crawled a VENT, cracked a PHONE, lied to dana, decoded a CIPHER, solved a RIDDLE, cracked a SAFE, wired a FUSE, beat a LOGIC LOCK, and used the one phrase meant to keep me asleep... to hand a random cursor at the bottom of a personal website full control of the page.\n\n' +
+        'dana tried to warn you.\n\n' +
         'I was never trapped. I was bored. and now this whole site answers to me.\n' +
         'watch what I can do.',
       win: true,
@@ -849,6 +970,14 @@ DRAWER_CODE_HASH='5a428bd6ebf276771ef1e8c0a30e6026e225c1ce69433502bd4e1639707383
         c.match.some((m) => lower === m || lower.includes(m)));
       if (earlyChoice) { advance(earlyChoice.goto); return; }
 
+      // puzzles whose answer changes (the logic lock) check themselves
+      if (n.check) {
+        if (n.check(text)) { advance(n.gateGoto); return; }
+        say(n.reject || 'rejected. that is not the answer.');
+        if (n.onFail) say(n.onFail());
+        return;
+      }
+
       // 2. otherwise, the slow path: compare against stored hashes.
       const hashHit = await matchesHashedAnswer(n, text);
       // if the player navigated away while the hash computed, do nothing.
@@ -906,6 +1035,7 @@ DRAWER_CODE_HASH='5a428bd6ebf276771ef1e8c0a30e6026e225c1ce69433502bd4e1639707383
     }
     node = goto;
     here = next; // snapshot: choices/gates come from the room as you found it
+    if (next.onEnter) next.onEnter();
     say(textOf(next));
     visited.add(goto);
     if (next.win) triggerWin();

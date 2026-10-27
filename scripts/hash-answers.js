@@ -73,7 +73,7 @@ const GATE_ENV = {
   termOn: 'TERM_ANSWER',
   serverSealed: 'RIDDLE_ANSWER',
   safe: 'SAFE_ANSWER',
-  drawer: 'DRAWER_CODE',
+  phone: 'PHONE_CODE',
 };
 
 function parseList(envVal) {
